@@ -1,11 +1,29 @@
-# prettier-sql
+# @blackhawks-hops/prettier-sql
 Prettier plugin for VERY opinionated SQL file and snippet formatting
 
 ## Installation
 
 ```bash
-npm install --save-dev prettier-sql
+npm install --save-dev @blackhawks-hops/prettier-sql
 ```
+
+## Publishing
+
+To publish this package to npm, follow these steps:
+
+1. Make sure you have an npm account and are part of the `blackhawks-hops` organization
+2. Login to npm:
+```bash
+npm login
+```
+
+3. Build and publish the package:
+```bash
+npm run build
+npm publish
+```
+
+The package includes the `publishConfig` setting with `"access": "public"` to ensure it can be published as a public scoped package.
 
 ## Usage
 
@@ -16,7 +34,7 @@ Add the plugin to your Prettier configuration:
 ```js
 // .prettierrc.js
 module.exports = {
-  plugins: [require('prettier-sql')],
+  plugins: [require('@blackhawks-hops/prettier-sql')],
   overrides: [
     {
       files: '*.sql',
@@ -45,7 +63,7 @@ This plugin will automatically format `.sql` files according to the opinionated 
 In JavaScript/TypeScript files, use the `sql` tag to format SQL template literals:
 
 ```javascript
-import { sql } from 'prettier-sql/tag';
+import { sql } from '@blackhawks-hops/prettier-sql/tag';
 
 const query = sql`
   SELECT id, name, email
@@ -57,7 +75,7 @@ const query = sql`
 After formatting, this will become:
 
 ```javascript
-import { sql } from 'prettier-sql/tag';
+import { sql } from '@blackhawks-hops/prettier-sql/tag';
 
 const query = sql`
 SELECT id
