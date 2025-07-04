@@ -1,5 +1,8 @@
 # @blackhawks-hops/prettier-sql
+
 Prettier plugin for VERY opinionated SQL file and snippet formatting
+
+[![Run Tests](https://github.com/blackhawks-hops/prettier-sql/actions/workflows/test.yml/badge.svg)](https://github.com/blackhawks-hops/prettier-sql/actions/workflows/test.yml)
 
 ## Installation
 
@@ -9,7 +12,8 @@ npm install --save-dev @blackhawks-hops/prettier-sql
 
 ## Publishing
 
-To publish this package to npm, follow these steps:
+
+To publish this package to npm manually, follow these steps:
 
 1. Make sure you have an npm account and are part of the `blackhawks-hops` organization
 2. Login to npm:
@@ -24,6 +28,7 @@ npm publish
 ```
 
 The package includes the `publishConfig` setting with `"access": "public"` to ensure it can be published as a public scoped package.
+
 
 ## Usage
 
