@@ -1,14 +1,14 @@
-import prettier from 'prettier';
-import * as sqlPlugin from '../src';
+import prettier from "prettier";
+import * as sqlPlugin from "../src";
 
 // Register the plugin with Prettier
 const options = {
   plugins: [sqlPlugin],
-  parser: 'sql',
+  parser: "sql",
 };
 
-describe('SQL Formatter', () => {
-  test('formats a simple SELECT statement', async () => {
+describe("SQL Formatter", () => {
+  test("formats a simple SELECT statement", async () => {
     const unformatted = `
       SELECT id, name, email FROM users WHERE status = 'active';
     `;
@@ -23,7 +23,7 @@ WHERE status = 'active';`;
     expect(formatted.trim()).toBe(expected);
   });
 
-  test('formats multiple columns and conditions', async () => {
+  test("formats multiple columns and conditions", async () => {
     const unformatted = `
       SELECT id, first_name, last_name, email, phone, address, city, state, zip_code
       FROM customers
@@ -48,7 +48,7 @@ WHERE status = 'active'
     expect(formatted.trim()).toBe(expected);
   });
 
-  test('formats a simple JOIN', async () => {
+  test("formats a simple JOIN", async () => {
     const unformatted = `
       SELECT u.id, u.name, o.order_id, o.total
       FROM users u
@@ -68,7 +68,7 @@ WHERE u.status = 'active';`;
     expect(formatted.trim()).toBe(expected);
   });
 
-  test('formats CTEs', async () => {
+  test("formats CTEs", async () => {
     const unformatted = `
       WITH active_users AS (
         SELECT id, name, email FROM users WHERE status = 'active'
@@ -105,7 +105,7 @@ LEFT JOIN recent_orders o ON u.id = o.user_id;`;
     expect(formatted.trim()).toBe(expected);
   });
 
-  test('formats multiple WHERE conditions', async () => {
+  test("formats multiple WHERE conditions", async () => {
     const unformatted = `
       SELECT * FROM products WHERE category = 'electronics' AND price > 100 AND stock > 0 AND manufacturer = 'Apple';
     `;
@@ -121,7 +121,7 @@ WHERE category = 'electronics'
     expect(formatted.trim()).toBe(expected);
   });
 
-  test('formats complex query with the example from README', async () => {
+  test("formats complex query with the example from README", async () => {
     const unformatted = `
       WITH cte1 AS (SELECT column1, column2, column3 FROM table1 WHERE column1 = 'value1' AND column2 = 'value2'),
       cte2 AS (SELECT column4, column5 FROM table2 WHERE column4 = 'value3')

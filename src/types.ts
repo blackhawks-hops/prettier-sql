@@ -1,11 +1,11 @@
 export enum NodeType {
-  Token = 'Token',
-  Select = 'Select',
-  CTE = 'CTE',
-  Join = 'Join',
-  Where = 'Where',
-  GroupBy = 'GroupBy',
-  OrderBy = 'OrderBy',
+  Token = "Token",
+  Select = "Select",
+  CTE = "CTE",
+  Join = "Join",
+  Where = "Where",
+  GroupBy = "GroupBy",
+  OrderBy = "OrderBy",
 }
 
 export interface Location {
