@@ -11,13 +11,21 @@ export function print(path: { getValue: () => unknown }): doc.builders.DocComman
 
     // If this is a SQL node from a template literal, format it
     if (hasSqlAst(node)) {
-        // Add a newline after the backtick for template literals
-        return [hardline, printSQLNode(node.sqlAst as SQLNode)];
+        // Format the SQL and add a newline after the backtick for template literals
+        const sqlAst = node.sqlAst as SQLNode & { isTemplateLiteral?: boolean };
+        const formattedSql = printSQLNode(sqlAst);
+
+        // For template literals, ensure proper formatting
+        if (sqlAst.isTemplateLiteral) {
+            return [hardline, formattedSql];
+        } else {
+            return formattedSql;
+        }
     }
 
     // Format a SQL file
-    if (node.type === "sql" && 
-        typeof node.value === 'string' && 
+    if (node.type === "sql" &&
+        typeof node.value === 'string' &&
         Array.isArray(node.tokens) &&
         Array.isArray(node.body) &&
         node.loc && typeof node.loc === 'object') {
@@ -46,9 +54,7 @@ function hasSqlAst(node: Record<string, unknown>): boolean {
  */
 function printSQLNode(node: SQLNode): doc.builders.DocCommand {
     // Format the SQL AST
-    const formattedSql = formatSQLBody(node.body);
-
-    return formattedSql;
+    return formatSQLBody(node.body);
 }
 
 /**
@@ -65,8 +71,8 @@ function formatSQLBody(nodes: Node[]): doc.builders.DocCommand {
 
         cteNodes.forEach((cte, index) => {
             if (index > 0) {
-                parts.push(",");
                 parts.push(hardline);
+                parts.push(", ");
             }
 
             parts.push(formatCTE(cte));
@@ -87,8 +93,14 @@ function formatSQLBody(nodes: Node[]): doc.builders.DocCommand {
         });
     }
 
-    // Add semicolon at the end
-    parts.push(";");
+    // Check if last character is already a semicolon to avoid duplicates
+    const lastPart = parts[parts.length - 1];
+    const endsWithSemicolon = typeof lastPart === "string" && lastPart.trim().endsWith(";");
+
+    // Add semicolon if not already present
+    if (!endsWithSemicolon) {
+        parts.push(";");
+    }
 
     return join("", parts);
 }
@@ -106,63 +118,23 @@ function formatCTE(node: Node): doc.builders.DocCommand {
     // Format the body of the CTE (usually a SELECT statement)
     const body = node.body || [];
     if (body.length > 0) {
-        const selectText = body
-            .map((token) => {
-                if (token.type === NodeType.Token) {
-                    return token.value || "";
+        // Check for SELECT statements in the body
+        const selectNodes = body.filter(n => n.type === NodeType.Select);
+
+        if (selectNodes.length > 0) {
+            // Format each SELECT node
+            parts.push(indent([formatSelect(selectNodes[0])]));
+        } else {
+            // Handle case where there might be other node types
+            const bodyParts = body.map(node => {
+                if (node.type === NodeType.Token && node.value) {
+                    return node.value;
                 }
                 return "";
-            })
-            .join(" ");
+            }).filter(Boolean);
 
-        // Re-parse the select text to format it properly
-        const selectTokens = selectText.split(" ");
-        const selectAst: Node[] = [];
-
-        // Very simplistic parsing for demo purposes
-        let i = 0;
-        while (i < selectTokens.length) {
-            if (selectTokens[i].toUpperCase() === "SELECT") {
-                const selectNode: Required<Pick<Node, 'type' | 'columns' | 'from' | 'joins' | 'where'>> = {
-                    type: NodeType.Select,
-                    columns: [],
-                    from: "",
-                    joins: [],
-                    where: [],
-                };
-
-                i++;
-                // Parse columns
-                while (i < selectTokens.length && selectTokens[i].toUpperCase() !== "FROM") {
-                    if (selectTokens[i] !== ",") {
-                        selectNode.columns.push(selectTokens[i]);
-                    }
-                    i++;
-                }
-
-                // Parse FROM
-                if (i < selectTokens.length && selectTokens[i].toUpperCase() === "FROM") {
-                    i++;
-                    selectNode.from = selectTokens[i];
-                    i++;
-                }
-
-                // Parse WHERE
-                if (i < selectTokens.length && selectTokens[i].toUpperCase() === "WHERE") {
-                    i++;
-                    while (i < selectTokens.length) {
-                        selectNode.where.push(selectTokens[i]);
-                        i++;
-                    }
-                }
-
-                selectAst.push(selectNode);
-            } else {
-                i++;
-            }
+            parts.push(indent([join(" ", bodyParts)]));
         }
-
-        parts.push(indent([formatSelect(selectAst[0])]));
     }
 
     parts.push(hardline);
@@ -217,13 +189,15 @@ function formatColumns(columns: string[]): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
 
     columns.forEach((column, index) => {
+        // Format each column according to the required style
         if (index === 0) {
-            // First column on the same line as SELECT
+            // First column directly after SELECT
             parts.push(column.toLowerCase());
         } else {
-            // Other columns aligned with 5-space indent (aligns with the 'T' in SELECT)
+            // Other columns on new lines with aligned commas
+            // 5 spaces indent aligns with the 'T' in SELECT
             parts.push(hardline);
-            parts.push(", ");
+            parts.push("     , ");
             parts.push(column.toLowerCase());
         }
     });
@@ -279,12 +253,12 @@ function formatWhere(conditions: string[]): doc.builders.DocCommand {
         if (i === 0) {
             parts.push(condition);
         } else {
-            parts.push(" ");
             parts.push(condition);
         }
 
         // Add the AND/OR with proper formatting
         parts.push(hardline);
+        parts.push("  "); // 2-space indent for AND/OR conditions
         parts.push(conditions[index].toUpperCase());
         parts.push(" ");
 
@@ -297,7 +271,6 @@ function formatWhere(conditions: string[]): doc.builders.DocCommand {
         parts.push(lastCondition);
     }
 
-    // Indent all lines after the first to align with the first condition
-    return join("", [parts[0], indent([join("", parts.slice(1))])]);
+    return join("", parts);
 }
 

@@ -46,15 +46,7 @@ module.exports = {
             options: {
                 parser: "sql",
             },
-        },
-        {
-            files: ["*.js", "*.ts"],
-            options: {
-                // For JavaScript files
-                // Use 'typescript-sql' for TypeScript files
-                parser: "babel-sql",
-            },
-        },
+        }
     ],
 };
 ```
@@ -62,34 +54,6 @@ module.exports = {
 ### SQL Files
 
 This plugin will automatically format `.sql` files according to the opinionated style rules.
-
-### Template Literals
-
-In JavaScript/TypeScript files, use the `sql` tag to format SQL template literals:
-
-```javascript
-import { sql } from "@blackhawks-hops/prettier-sql/tag";
-
-const query = sql`
-  SELECT id, name, email
-  FROM users
-  WHERE status = 'active'
-`;
-```
-
-After formatting, this will become:
-
-```javascript
-import { sql } from "@blackhawks-hops/prettier-sql/tag";
-
-const query = sql`
-SELECT id
-     , name
-     , email
-FROM users
-WHERE status = 'active'
-`;
-```
 
 ## Example
 

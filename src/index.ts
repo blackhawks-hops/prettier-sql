@@ -6,20 +6,10 @@ import { print } from "./printer";
 export const parsers = {
     // Parser for standalone SQL files
     sql: {
-        parse: SQLParser.parse,
+        parse: SQLParser.parse.bind(SQLParser),
         astFormat: "sql-ast",
-        locStart: SQLParser.locStart,
-        locEnd: SQLParser.locEnd,
-    },
-    // Enhanced JavaScript parser to handle SQL template literals
-    "babel-sql": {
-        ...javascriptParsers.babel,
-        parse: SQLParser.parseEmbedded(javascriptParsers.babel.parse),
-    },
-    // Enhanced TypeScript parser to handle SQL template literals
-    "typescript-sql": {
-        ...typescriptParsers.typescript,
-        parse: SQLParser.parseEmbedded(typescriptParsers.typescript.parse),
+        locStart: SQLParser.locStart.bind(SQLParser),
+        locEnd: SQLParser.locEnd.bind(SQLParser),
     },
 };
 
