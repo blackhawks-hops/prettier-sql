@@ -11,7 +11,7 @@
     "scripts": {
         "build": "tsc",
         "test": "jest",
-        "pretty": "prettier --write src/**/*",
+        "pretty": "prettier --write src/**/* tests/**/*.ts",
         "lint": "eslint . --ext .ts",
         "typecheck": "tsc --noEmit",
         "prepublishOnly": "npm run build"
