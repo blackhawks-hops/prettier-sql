@@ -1,4 +1,4 @@
-name: Run Tests
+name: Build and Test
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ '*' ]
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -25,8 +25,14 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
+    - name: Lint
+      run: npm run lint
+      
+    - name: Type check
+      run: npm run typecheck
+    
+    - name: Test
+      run: npm test
+    
     - name: Build
       run: npm run build
-    
-    - name: Run tests
-      run: npm test
