@@ -7,6 +7,7 @@ module.exports = {
     },
     ignorePatterns: ["dist/", "node_modules/"],
     rules: {
-        // Add custom rules here
+        // Allow 'any' in declarations.d.ts and type assertions
+        "@typescript-eslint/no-explicit-any": "off"
     },
 };

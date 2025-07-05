@@ -1,5 +1,5 @@
 import { doc } from "prettier";
-import { Node, NodeType, SQLNode } from "./types";
+import { Node, NodeType, SQLNode, Location } from "./types";
 
 const { join, indent, hardline } = doc.builders;
 
@@ -7,23 +7,40 @@ const { join, indent, hardline } = doc.builders;
  * Format SQL AST into a pretty-printed string
  */
 export function print(path: { getValue: () => unknown }): doc.builders.DocCommand {
-    const node = path.getValue();
+    const node = path.getValue() as Record<string, unknown>;
 
     // If this is a SQL node from a template literal, format it
-    if (node.sqlAst) {
+    if (hasSqlAst(node)) {
         // Add a newline after the backtick for template literals
-        return [hardline, printSQLNode(node.sqlAst)];
+        return [hardline, printSQLNode(node.sqlAst as SQLNode)];
     }
 
     // Format a SQL file
-    if (node.type === "sql") {
-        return printSQLNode(node);
+    if (node.type === "sql" && 
+        typeof node.value === 'string' && 
+        Array.isArray(node.tokens) &&
+        Array.isArray(node.body) &&
+        node.loc && typeof node.loc === 'object') {
+        const sqlNode: SQLNode = {
+            type: String(node.type),
+            value: String(node.value),
+            tokens: node.tokens as string[],
+            body: node.body as Node[],
+            loc: node.loc as Location
+        };
+        return printSQLNode(sqlNode);
     }
 
     // For other nodes in JavaScript/TypeScript
     return "";
 }
 
+/**
+ * Type guard for nodes with sqlAst property
+ */
+function hasSqlAst(node: Record<string, unknown>): boolean {
+    return 'sqlAst' in node && node.sqlAst !== null && typeof node.sqlAst === 'object';
+}
 /**
  * Print a SQL node
  */
@@ -106,7 +123,7 @@ function formatCTE(node: Node): doc.builders.DocCommand {
         let i = 0;
         while (i < selectTokens.length) {
             if (selectTokens[i].toUpperCase() === "SELECT") {
-                const selectNode: Node = {
+                const selectNode: Required<Pick<Node, 'type' | 'columns' | 'from' | 'joins' | 'where'>> = {
                     type: NodeType.Select,
                     columns: [],
                     from: "",
@@ -283,3 +300,4 @@ function formatWhere(conditions: string[]): doc.builders.DocCommand {
     // Indent all lines after the first to align with the first condition
     return join("", [parts[0], indent([join("", parts.slice(1))])]);
 }
+

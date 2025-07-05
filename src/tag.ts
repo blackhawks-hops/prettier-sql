@@ -13,3 +13,4 @@ export function sql(strings: TemplateStringsArray, ...values: unknown[]): string
 
     return result;
 }
+

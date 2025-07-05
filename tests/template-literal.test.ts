@@ -155,3 +155,4 @@ WHERE status = \${status}
         expect(formatted).toBe(expected);
     });
 });
+

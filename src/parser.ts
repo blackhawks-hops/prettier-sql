@@ -84,6 +84,7 @@ export class SQLParser {
                 // Parse CTE name
                 if (i < tokens.length) {
                     cteNode.name = tokens[i];
+                    cteNode.columns = [];
                     i++;
                 }
 
@@ -115,7 +116,7 @@ export class SQLParser {
 
             if (token === "SELECT") {
                 // Parse SELECT statement
-                const selectNode: Node = {
+                const selectNode: Required<Pick<Node, 'type' | 'columns' | 'from' | 'joins' | 'where'>> = {
                     type: NodeType.Select,
                     columns: [],
                     from: "",
@@ -146,7 +147,7 @@ export class SQLParser {
                     const joinType = tokens[i].toUpperCase();
                     i++;
 
-                    const joinNode: Node = {
+                    const joinNode: Required<Pick<Node, 'type' | 'joinType' | 'table' | 'condition'>> = {
                         type: NodeType.Join,
                         joinType,
                         table: "",
@@ -238,21 +239,27 @@ export class SQLParser {
             // Then find and process SQL template literals
             this.processNodes(ast, (node) => {
                 // Check for tagged template expressions with tag name 'sql'
+                const nodeType = node.type as string;
+                
                 if (
-                    node.type === "TaggedTemplateExpression" &&
-                    node.tag.type === "Identifier" &&
-                    node.tag.name === "sql"
+                    nodeType === "TaggedTemplateExpression" &&
+                    this.hasTagProperty(node) &&
+                    this.hasQuasiProperty(node)
                 ) {
-                    // Extract the SQL from the template literal
-                    const sqlText = node.quasi.quasis
-                        .map((quasi: { value: { raw: string } }) => quasi.value.raw)
-                        .join("");
+                    const tag = node.tag as { type: string; name: string };
+                    if (tag.type === "Identifier" && tag.name === "sql") {
+                        // Extract the SQL from the template literal
+                        const quasi = node.quasi as { quasis: Array<{ value: { raw: string } }> };
+                        const sqlText = quasi.quasis
+                            .map((q) => q.value.raw)
+                            .join("");
 
-                    // Parse the SQL text
-                    const sqlAst = this.parse(sqlText);
+                        // Parse the SQL text
+                        const sqlAst = this.parse(sqlText);
 
-                    // Attach the SQL AST to the node for later processing
-                    node.sqlAst = sqlAst;
+                        // Attach the SQL AST to the node for later processing
+                        (node as any).sqlAst = sqlAst;
+                    }
                 }
                 return node;
             });
@@ -262,23 +269,41 @@ export class SQLParser {
     }
 
     /**
+     * Type guard for nodes with tag property
+     */
+    static hasTagProperty(node: Record<string, unknown>): boolean {
+        return 'tag' in node && node.tag !== null && typeof node.tag === 'object';
+    }
+
+    /**
+     * Type guard for nodes with quasi property
+     */
+    static hasQuasiProperty(node: Record<string, unknown>): boolean {
+        return 'quasi' in node && node.quasi !== null && typeof node.quasi === 'object';
+    }
+    /**
      * Process each node in the AST
      */
     static processNodes(
-        ast: Record<string, unknown>,
+        ast: unknown,
         processFn: (node: Record<string, unknown>) => Record<string, unknown>
     ): void {
         if (!ast || typeof ast !== "object") {
             return;
         }
 
+        // Type guard to ensure ast is an object with string keys
+        const astObject = ast as Record<string, unknown>;
+
         // Process this node
-        processFn(ast);
+        if (this.isValidNode(astObject)) {
+            processFn(astObject);
+        }
 
         // Process children
-        for (const key in ast) {
-            if (ast.hasOwnProperty(key) && key !== "loc" && key !== "range") {
-                const value = ast[key];
+        for (const key in astObject) {
+            if (Object.prototype.hasOwnProperty.call(astObject, key) && key !== "loc" && key !== "range") {
+                const value = astObject[key];
                 if (Array.isArray(value)) {
                     value.forEach((item) => {
                         if (item && typeof item === "object") {
@@ -291,4 +316,12 @@ export class SQLParser {
             }
         }
     }
+
+    /**
+     * Check if an object can be processed as a node
+     */
+    static isValidNode(obj: unknown): obj is Record<string, unknown> {
+        return obj !== null && typeof obj === "object";
+    }
 }
+

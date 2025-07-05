@@ -156,3 +156,4 @@ WHERE cte1.column2 = 'value4'
         expect(formatted.trim()).toBe(expected);
     });
 });
+
