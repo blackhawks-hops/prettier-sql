@@ -1,4 +1,5 @@
 import prettier from "prettier";
+import { describe, test, expect } from "vitest";
 import * as sqlPlugin from "../src";
 
 // Register the plugin with Prettier
@@ -156,4 +157,3 @@ WHERE cte1.column2 = 'value4'
         expect(formatted.trim()).toBe(expected);
     });
 });
-
