@@ -39,23 +39,23 @@ Add the plugin to your Prettier configuration:
 ```js
 // .prettierrc.js
 module.exports = {
-  plugins: [require("@blackhawks-hops/prettier-sql")],
-  overrides: [
-    {
-      files: "*.sql",
-      options: {
-        parser: "sql",
-      },
-    },
-    {
-      files: ["*.js", "*.ts"],
-      options: {
-        // For JavaScript files
-        // Use 'typescript-sql' for TypeScript files
-        parser: "babel-sql",
-      },
-    },
-  ],
+    plugins: [require("@blackhawks-hops/prettier-sql")],
+    overrides: [
+        {
+            files: "*.sql",
+            options: {
+                parser: "sql",
+            },
+        },
+        {
+            files: ["*.js", "*.ts"],
+            options: {
+                // For JavaScript files
+                // Use 'typescript-sql' for TypeScript files
+                parser: "babel-sql",
+            },
+        },
+    ],
 };
 ```
 
@@ -95,13 +95,13 @@ WHERE status = 'active'
 
 Here is an example of how this plugin will format
 
-- commas go at the beginning of each column name, and are lined up below the `T` in the `SELECT`
-- column names are all lower case and on their own lines
-- function names are all uppercase
-- CTEs are indented
-- GROUP BY columns are all on one line
-- JOIN clauses are all on one line
-- additional WHERE clauses move to a new line, indented to line up with the end of the WHERE
+-   commas go at the beginning of each column name, and are lined up below the `T` in the `SELECT`
+-   column names are all lower case and on their own lines
+-   function names are all uppercase
+-   CTEs are indented
+-   GROUP BY columns are all on one line
+-   JOIN clauses are all on one line
+-   additional WHERE clauses move to a new line, indented to line up with the end of the WHERE
 
 ```sql
 WITH cte1 AS (
