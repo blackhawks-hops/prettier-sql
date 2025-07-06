@@ -185,7 +185,7 @@ function formatColumns(columns: import("./types").Column[]): doc.builders.DocCom
 
         // Add alias if it exists
         if (column.alias) {
-            formattedColumn += " AS " + column.alias.toLowerCase();
+            formattedColumn += " AS " + column.alias;
         }
 
         if (index === 0) {

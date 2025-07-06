@@ -32,10 +32,10 @@ export class SQLParser {
         // Split the SQL into tokens and build a simple AST
         const lines = text.split("\n");
         const tokens = this.tokenize(text);
-        
+
         // Pre-process tokens to handle column aliases correctly
         const processedTokens = this.preprocessTokens(tokens);
-        
+
         const ast = this.buildAST(processedTokens);
 
         // Add position information
@@ -50,22 +50,19 @@ export class SQLParser {
             },
         };
     }
-    
+
     /**
      * Preprocess tokens to handle special cases like column aliases with AS
      */
     static preprocessTokens(tokens: string[]): string[] {
         const result: string[] = [];
         let i = 0;
-        
+
         while (i < tokens.length) {
             // Check for AS followed by a name (column alias pattern)
-            if (i + 2 < tokens.length && 
-                (tokens[i+1].toUpperCase() === "AS") && 
-                !this.isClauseKeyword(tokens[i+2])) {
-                
+            if (i + 2 < tokens.length && tokens[i + 1].toUpperCase() === "AS" && !this.isClauseKeyword(tokens[i + 2])) {
                 // Combine the expression before AS, the AS keyword, and the alias into a single token
-                const combinedToken = `${tokens[i]} AS ${tokens[i+2]}`;
+                const combinedToken = `${tokens[i]} AS ${tokens[i + 2]}`;
                 result.push(combinedToken);
                 i += 3; // Skip the next two tokens as we've combined them
             } else {
@@ -73,7 +70,7 @@ export class SQLParser {
                 i += 1;
             }
         }
-        
+
         return result;
     }
 
@@ -279,7 +276,7 @@ export class SQLParser {
 
                 // Parse SELECT columns until FROM
                 selectNode.columns = [];
-                
+
                 // Collect all column tokens until FROM
                 const columnTokens: string[] = [];
                 while (i < tokens.length && tokens[i].toUpperCase() !== "FROM") {
@@ -288,7 +285,7 @@ export class SQLParser {
                     }
                     i++;
                 }
-                
+
                 // Process column tokens to identify functions and aliases
                 for (let j = 0; j < columnTokens.length; j++) {
                     // Get the current token and check if it contains an alias
@@ -525,40 +522,20 @@ export class SQLParser {
 
     static includesFunction(token: string): boolean {
         // Check if the token is a function name
-        return FUNCTIONS.some((func) => token.toUpperCase().startsWith(func.toUpperCase() + "("));
+        return FUNCTIONS.some((func) => token.toUpperCase().startsWith(func.toUpperCase()));
     }
 
     /**
      * Parse a column expression which may include an alias or function
      */
     static parseColumn(columnText: string): import("./types").Column {
-        // We need to handle complete column expressions as they appear in the SQL,
-        // including function calls and aliases
-        
-        // Special handling for column with AS alias
-        // Case insensitive match for AS
-        const asRegex = / AS | as | As | aS /;
-        const asMatch = asRegex.exec(columnText);
-        
-        if (asMatch) {
-            const name = columnText.substring(0, asMatch.index).trim();
-            const alias = columnText.substring(asMatch.index + asMatch[0].length).trim();
-            // Check if this is a function
-            const isFunction = this.includesFunction(name) || name.includes('(');
-            
-            return {
-                name,
-                alias,
-                isFunction
-            };
+        const aliasRegex = /^(\S+)\s+AS\s+(\S+)$/i;
+        const aliasMatch = aliasRegex.exec(columnText);
+        if (aliasMatch) {
+            const [, name, alias] = aliasMatch;
+            return { name, alias };
         } else {
-            // No alias, just check if it's a function
-            const isFunction = this.includesFunction(columnText) || columnText.includes('(');
-            
-            return {
-                name: columnText,
-                isFunction
-            };
+            return { name: columnText };
         }
     }
 }
