@@ -13,11 +13,17 @@ export interface Location {
     end: { line: number; column: number };
 }
 
+export interface Column {
+    name: string;
+    alias?: string;
+    isFunction?: boolean;
+}
+
 export interface Node {
     type: NodeType;
     value?: string;
     name?: string;
-    columns?: string[];
+    columns?: Column[];
     from?: string;
     joins?: Node[];
     where?: string[];

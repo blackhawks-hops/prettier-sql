@@ -91,7 +91,7 @@ WHERE u.status = 'active';`;
 )
 , recent_orders AS (
     SELECT user_id
-         , count(*) as order_count
+         , COUNT(*) as order_count
     FROM orders
     WHERE created_at > '2023-01-01'
 )
@@ -152,6 +152,35 @@ FROM cte1
 JOIN cte2 ON cte1.column1 = cte2.column4
 WHERE cte1.column2 = 'value4'
   AND cte2.column5 = 'value5';`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("formats column aliases correctly", async () => {
+        const unformatted = `
+      SELECT id AS user_id, name AS user_name, email AS user_email FROM users WHERE status = 'active';
+    `;
+
+        const expected = `SELECT id AS user_id
+     , name AS user_name
+     , email AS user_email
+FROM users
+WHERE status = 'active';`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("formats functions in columns correctly", async () => {
+        const unformatted = `
+      SELECT id, COALESCE(name, 'Unknown') AS display_name, COUNT(*) AS user_count FROM users;
+    `;
+
+        const expected = `SELECT id
+     , COALESCE(NAME, 'unknown') AS display_name
+     , COUNT(*) AS user_count
+FROM users;`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);

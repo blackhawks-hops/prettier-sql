@@ -1,5 +1,29 @@
 import { Node, NodeType, SQLNode } from "./types";
 
+const FUNCTIONS = ["ABS", "AVG", "COUNT", "MAX", "MIN", "SUM", "LENGTH", "TRIM", "UPPER", "LOWER", "NOW", "COALESCE"];
+export const KEYWORDS = [
+    "SELECT",
+    "FROM",
+    "WHERE",
+    "JOIN",
+    "LEFT JOIN",
+    "RIGHT JOIN",
+    "INNER JOIN",
+    "OUTER JOIN",
+    "ON",
+    "AND",
+    "OR",
+    "AS",
+    "WITH",
+    "GROUP BY",
+    "ORDER BY",
+    "HAVING",
+    "LIMIT",
+    "UNION",
+    "INTERSECT",
+    "EXCEPT",
+];
+
 export class SQLParser {
     /**
      * Parse SQL code into an AST
@@ -8,19 +32,49 @@ export class SQLParser {
         // Split the SQL into tokens and build a simple AST
         const lines = text.split("\n");
         const tokens = this.tokenize(text);
-        const ast = this.buildAST(tokens);
+        
+        // Pre-process tokens to handle column aliases correctly
+        const processedTokens = this.preprocessTokens(tokens);
+        
+        const ast = this.buildAST(processedTokens);
 
         // Add position information
         return {
             type: "sql",
             value: text,
-            tokens: tokens,
+            tokens: processedTokens,
             body: ast,
             loc: {
                 start: { line: 1, column: 0 },
                 end: { line: lines.length, column: lines[lines.length - 1].length },
             },
         };
+    }
+    
+    /**
+     * Preprocess tokens to handle special cases like column aliases with AS
+     */
+    static preprocessTokens(tokens: string[]): string[] {
+        const result: string[] = [];
+        let i = 0;
+        
+        while (i < tokens.length) {
+            // Check for AS followed by a name (column alias pattern)
+            if (i + 2 < tokens.length && 
+                (tokens[i+1].toUpperCase() === "AS") && 
+                !this.isClauseKeyword(tokens[i+2])) {
+                
+                // Combine the expression before AS, the AS keyword, and the alias into a single token
+                const combinedToken = `${tokens[i]} AS ${tokens[i+2]}`;
+                result.push(combinedToken);
+                i += 3; // Skip the next two tokens as we've combined them
+            } else {
+                result.push(tokens[i]);
+                i += 1;
+            }
+        }
+        
+        return result;
     }
 
     /**
@@ -33,17 +87,9 @@ export class SQLParser {
         // Prepare tokens array
         const tokens: string[] = [];
 
-        // Define SQL keywords and clause markers
-        // Add GROUP BY and ORDER BY as separate entries since they're multi-word keywords
-        const keywords = [
-            "SELECT", "FROM", "WHERE", "JOIN", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "OUTER JOIN",
-            "ON", "AND", "OR", "AS", "WITH", "GROUP BY", "ORDER BY", "HAVING", "LIMIT",
-            "UNION", "INTERSECT", "EXCEPT", "DISTINCT", "COUNT", "SUM", "AVG", "MIN", "MAX"
-        ];
-
         // Create a regex pattern for SQL keywords that ensures they are matched as whole words
-        const keywordPattern = keywords.map(k => `\\b${k.replace(/\s+/g, '\\s+')}\\b`).join('|');
-        const keywordRegex = new RegExp(keywordPattern, 'gi');
+        const keywordPattern = KEYWORDS.map((k) => `\\b${k.replace(/\s+/g, "\\s+")}\\b`).join("|");
+        const keywordRegex = new RegExp(keywordPattern, "gi");
 
         // Replace string literals temporarily to avoid parsing their contents
         const stringPlaceholder = "__STRING_LITERAL__";
@@ -70,7 +116,10 @@ export class SQLParser {
             // Process text before the current keyword
             if (beforeText) {
                 // Handle commas and content between keywords
-                const segments = beforeText.split(',').map(segment => segment.trim()).filter(Boolean);
+                const segments = beforeText
+                    .split(",")
+                    .map((segment) => segment.trim())
+                    .filter(Boolean);
 
                 for (let i = 0; i < segments.length; i++) {
                     let segment = segments[i];
@@ -82,7 +131,7 @@ export class SQLParser {
 
                     tokens.push(segment);
                     if (i < segments.length - 1) {
-                        tokens.push(',');
+                        tokens.push(",");
                     }
                 }
             }
@@ -97,7 +146,10 @@ export class SQLParser {
             const remainingText = withPlaceholders.substring(lastIndex).trim();
 
             if (remainingText) {
-                const segments = remainingText.split(',').map(segment => segment.trim()).filter(Boolean);
+                const segments = remainingText
+                    .split(",")
+                    .map((segment) => segment.trim())
+                    .filter(Boolean);
 
                 for (let i = 0; i < segments.length; i++) {
                     let segment = segments[i];
@@ -109,7 +161,7 @@ export class SQLParser {
 
                     tokens.push(segment);
                     if (i < segments.length - 1) {
-                        tokens.push(',');
+                        tokens.push(",");
                     }
                 }
             }
@@ -118,9 +170,16 @@ export class SQLParser {
         // Handle special cases: parentheses for subqueries and CTEs
         const processedTokens: string[] = [];
         for (const token of tokens) {
-            if (token.includes('(') || token.includes(')')) {
+            if (this.includesFunction(token)) {
+                // uppercase function names
+                processedTokens.push(token.toUpperCase());
+            } else if (token.includes("(") || token.includes(")")) {
                 // Split token by parentheses but keep the parentheses
-                const parts = token.split(/([()])/g).filter(Boolean).map(part => part.trim()).filter(Boolean);
+                const parts = token
+                    .split(/([()])/g)
+                    .filter(Boolean)
+                    .map((part) => part.trim())
+                    .filter(Boolean);
                 processedTokens.push(...parts);
             } else {
                 processedTokens.push(token);
@@ -209,7 +268,7 @@ export class SQLParser {
             // Handle SELECT statements
             if (token === "SELECT") {
                 // Initialize a new SELECT node
-                const selectNode: Required<Pick<Node, 'type' | 'columns' | 'from' | 'joins' | 'where'>> = {
+                const selectNode: Required<Pick<Node, "type" | "columns" | "from" | "joins" | "where">> = {
                     type: NodeType.Select,
                     columns: [],
                     from: "",
@@ -219,11 +278,23 @@ export class SQLParser {
                 i++;
 
                 // Parse SELECT columns until FROM
+                selectNode.columns = [];
+                
+                // Collect all column tokens until FROM
+                const columnTokens: string[] = [];
                 while (i < tokens.length && tokens[i].toUpperCase() !== "FROM") {
                     if (tokens[i] !== ",") {
-                        selectNode.columns.push(tokens[i]);
+                        columnTokens.push(tokens[i]);
                     }
                     i++;
+                }
+                
+                // Process column tokens to identify functions and aliases
+                for (let j = 0; j < columnTokens.length; j++) {
+                    // Get the current token and check if it contains an alias
+                    const columnText = columnTokens[j];
+                    const column = this.parseColumn(columnText);
+                    selectNode.columns.push(column);
                 }
 
                 // Parse FROM clause
@@ -240,7 +311,7 @@ export class SQLParser {
                     const joinType = tokens[i].toUpperCase();
                     i++;
 
-                    const joinNode: Required<Pick<Node, 'type' | 'joinType' | 'table' | 'condition'>> = {
+                    const joinNode: Required<Pick<Node, "type" | "joinType" | "table" | "condition">> = {
                         type: NodeType.Join,
                         joinType,
                         table: "",
@@ -274,8 +345,12 @@ export class SQLParser {
                     // Collect all conditions including AND/OR
                     const whereConditions: string[] = [];
 
-                    while (i < tokens.length &&
-                           !["GROUP", "ORDER", "LIMIT", "HAVING", "UNION", "INTERSECT", "EXCEPT"].includes(tokens[i].toUpperCase())) {
+                    while (
+                        i < tokens.length &&
+                        !["GROUP", "ORDER", "LIMIT", "HAVING", "UNION", "INTERSECT", "EXCEPT"].includes(
+                            tokens[i].toUpperCase()
+                        )
+                    ) {
                         whereConditions.push(tokens[i]);
                         i++;
                     }
@@ -308,8 +383,21 @@ export class SQLParser {
      */
     static isClauseKeyword(token: string): boolean {
         const clauseKeywords = [
-            "SELECT", "FROM", "WHERE", "GROUP", "ORDER", "HAVING", "LIMIT",
-            "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "UNION", "INTERSECT", "EXCEPT"
+            "SELECT",
+            "FROM",
+            "WHERE",
+            "GROUP",
+            "ORDER",
+            "HAVING",
+            "LIMIT",
+            "JOIN",
+            "LEFT",
+            "RIGHT",
+            "INNER",
+            "OUTER",
+            "UNION",
+            "INTERSECT",
+            "EXCEPT",
         ];
 
         return clauseKeywords.includes(token.toUpperCase());
@@ -320,7 +408,7 @@ export class SQLParser {
      */
     static isJoinKeyword(token: string): boolean {
         const joinKeywords = ["JOIN", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "OUTER JOIN"];
-        return joinKeywords.some(keyword => token.toUpperCase().includes(keyword));
+        return joinKeywords.some((keyword) => token.toUpperCase().includes(keyword));
     }
 
     /**
@@ -359,15 +447,13 @@ export class SQLParser {
                     if (tag.type === "Identifier" && tag.name === "sql") {
                         // Extract the SQL from the template literal
                         const quasi = node.quasi as { quasis: Array<{ value: { raw: string } }> };
-                        const sqlText = quasi.quasis
-                            .map((q) => q.value.raw)
-                            .join("");
+                        const sqlText = quasi.quasis.map((q) => q.value.raw).join("");
 
                         // Parse the SQL text
                         const sqlAst = this.parse(sqlText);
 
                         // Add a newline to the beginning to ensure proper formatting for template literals
-                        if (sqlAst && typeof sqlAst === 'object') {
+                        if (sqlAst && typeof sqlAst === "object") {
                             sqlAst.value = "\n" + sqlText.trim();
                             // Add flag to indicate this is a template literal for special handling in printer
                             (sqlAst as any).isTemplateLiteral = true;
@@ -388,22 +474,19 @@ export class SQLParser {
      * Type guard for nodes with tag property
      */
     static hasTagProperty(node: Record<string, unknown>): boolean {
-        return 'tag' in node && node.tag !== null && typeof node.tag === 'object';
+        return "tag" in node && node.tag !== null && typeof node.tag === "object";
     }
 
     /**
      * Type guard for nodes with quasi property
      */
     static hasQuasiProperty(node: Record<string, unknown>): boolean {
-        return 'quasi' in node && node.quasi !== null && typeof node.quasi === 'object';
+        return "quasi" in node && node.quasi !== null && typeof node.quasi === "object";
     }
     /**
      * Process each node in the AST
      */
-    static processNodes(
-        ast: unknown,
-        processFn: (node: Record<string, unknown>) => Record<string, unknown>
-    ): void {
+    static processNodes(ast: unknown, processFn: (node: Record<string, unknown>) => Record<string, unknown>): void {
         if (!ast || typeof ast !== "object") {
             return;
         }
@@ -439,5 +522,43 @@ export class SQLParser {
     static isValidNode(obj: unknown): obj is Record<string, unknown> {
         return obj !== null && typeof obj === "object";
     }
-}
 
+    static includesFunction(token: string): boolean {
+        // Check if the token is a function name
+        return FUNCTIONS.some((func) => token.toUpperCase().startsWith(func.toUpperCase() + "("));
+    }
+
+    /**
+     * Parse a column expression which may include an alias or function
+     */
+    static parseColumn(columnText: string): import("./types").Column {
+        // We need to handle complete column expressions as they appear in the SQL,
+        // including function calls and aliases
+        
+        // Special handling for column with AS alias
+        // Case insensitive match for AS
+        const asRegex = / AS | as | As | aS /;
+        const asMatch = asRegex.exec(columnText);
+        
+        if (asMatch) {
+            const name = columnText.substring(0, asMatch.index).trim();
+            const alias = columnText.substring(asMatch.index + asMatch[0].length).trim();
+            // Check if this is a function
+            const isFunction = this.includesFunction(name) || name.includes('(');
+            
+            return {
+                name,
+                alias,
+                isFunction
+            };
+        } else {
+            // No alias, just check if it's a function
+            const isFunction = this.includesFunction(columnText) || columnText.includes('(');
+            
+            return {
+                name: columnText,
+                isFunction
+            };
+        }
+    }
+}
