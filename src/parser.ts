@@ -107,7 +107,6 @@ export class SQLParser {
 
         // Match SQL keywords
         while ((match = keywordRegex.exec(withPlaceholders)) !== null) {
-            const keyword = match[0].toUpperCase();
             const beforeText = withPlaceholders.substring(lastIndex, match.index).trim();
 
             // Process text before the current keyword
@@ -194,7 +193,7 @@ export class SQLParser {
 
         let i = 0;
         let inCTE = false; // Track if we're inside a WITH clause (CTE)
-        let cteNodes: Node[] = [];
+        const cteNodes: Node[] = [];
 
         // Process tokens
         while (i < tokens.length) {

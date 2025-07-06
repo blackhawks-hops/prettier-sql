@@ -1,5 +1,3 @@
-import { parsers as javascriptParsers } from "prettier/parser-babel";
-import { parsers as typescriptParsers } from "prettier/parser-typescript";
 import { SQLParser } from "./parser";
 import { print } from "./printer";
 

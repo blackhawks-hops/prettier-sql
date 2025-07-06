@@ -35,6 +35,18 @@
         "tabWidth": 4,
         "printWidth": 120
     },
+    "eslintConfig": {
+        "parser": "@typescript-eslint/parser",
+        "extends": ["plugin:@typescript-eslint/recommended"],
+        "parserOptions": {
+            "ecmaVersion": 2020,
+            "sourceType": "module"
+        },
+        "ignorePatterns": ["dist/", "node_modules/"],
+        "rules": {
+            "@typescript-eslint/no-explicit-any": "off"
+        }
+    },
     "keywords": [
         "prettier",
         "plugin",
