@@ -344,7 +344,7 @@ export class SQLParser {
                     while (
                         i < tokens.length &&
                         !["GROUP", "ORDER", "LIMIT", "HAVING", "UNION", "INTERSECT", "EXCEPT"].includes(
-                            tokens[i].toUpperCase()
+                            tokens[i].toUpperCase(),
                         )
                     ) {
                         whereConditions.push(tokens[i]);

@@ -1,4 +1,4 @@
-declare module 'prettier' {
+declare module "prettier" {
     namespace doc {
         namespace builders {
             type DocCommand = any;
@@ -12,9 +12,9 @@ declare module 'prettier' {
 
     function format(source: string, options?: any): Promise<string>;
 }
-declare module 'prettier/parser-babel' {
+declare module "prettier/parser-babel" {
     export const parsers: Record<string, any>;
 }
-declare module 'prettier/parser-typescript' {
+declare module "prettier/parser-typescript" {
     export const parsers: Record<string, any>;
 }

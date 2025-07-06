@@ -32,4 +32,3 @@ export const options = {};
 
 // Define the name of the plugin
 export const name = "prettier-sql";
-

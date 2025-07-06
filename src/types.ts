@@ -40,4 +40,3 @@ export interface SQLNode {
     body: Node[];
     loc: Location;
 }
-
