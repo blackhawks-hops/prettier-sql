@@ -1,4 +1,4 @@
-import { AST } from 'node-sql-parser';
+import { AST } from "node-sql-parser";
 
 export interface Location {
     start: { line: number; column: number };

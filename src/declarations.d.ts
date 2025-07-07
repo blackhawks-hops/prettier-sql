@@ -19,7 +19,7 @@ declare module "prettier/parser-typescript" {
     export const parsers: Record<string, any>;
 }
 
-declare module 'node-sql-parser' {
+declare module "node-sql-parser" {
     import { LocationRange } from "pegjs";
 
     export interface BaseFrom {
@@ -60,7 +60,7 @@ declare module 'node-sql-parser' {
         columns: any[] | Column[];
         from: any[] | null;
         where: Binary | null;
-        groupby: { columns: any[] | null, modifiers: any[] };
+        groupby: { columns: any[] | null; modifiers: any[] };
         having: any[] | null;
         orderby: any[] | null;
         limit: any | null;

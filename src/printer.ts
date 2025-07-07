@@ -9,8 +9,8 @@ const { join, indent, hardline } = doc.builders;
  */
 export function print(path: { getValue: () => unknown }): doc.builders.DocCommand {
     const node = path.getValue() as SQLNode;
-    
-    if (node?.type === 'sql') {
+
+    if (node?.type === "sql") {
         return printSQLNode(node);
     }
 
@@ -22,15 +22,18 @@ export function print(path: { getValue: () => unknown }): doc.builders.DocComman
  */
 function printSQLNode(node: SQLNode): doc.builders.DocCommand {
     const ast = node.ast;
-    
+
     if (Array.isArray(ast) && ast.length > 0) {
         // Handle multiple statements
-        return join(hardline + hardline, ast.map(stmt => formatStatement(stmt)));
+        return join(
+            hardline + hardline,
+            ast.map((stmt) => formatStatement(stmt)),
+        );
     } else if (!Array.isArray(ast)) {
         // Handle single statement
         return formatStatement(ast);
     }
-    
+
     // Fallback if no valid AST is provided
     return "";
 }
@@ -44,7 +47,7 @@ function formatStatement(ast: AST | undefined): doc.builders.DocCommand {
     }
 
     switch (ast.type) {
-        case 'select':
+        case "select":
             return formatSelect(ast);
         default:
             // For unsupported statement types, return as is
@@ -57,14 +60,14 @@ function formatStatement(ast: AST | undefined): doc.builders.DocCommand {
  */
 function formatSelect(ast: AST): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-    
+
     // Format SELECT and columns
     parts.push("SELECT");
-    
+
     if (ast.columns && Array.isArray(ast.columns)) {
         parts.push(formatColumns(ast.columns));
     }
-    
+
     // Format FROM clause
     if (ast.from && Array.isArray(ast.from) && ast.from.length > 0) {
         parts.push(hardline);
@@ -72,26 +75,26 @@ function formatSelect(ast: AST): doc.builders.DocCommand {
         parts.push(" ");
         parts.push(formatFrom(ast.from));
     }
-    
+
     // Process JOIN conditions - joins are part of the from array in node-sql-parser
-    const joins = ast.from?.filter(item => item.join) || [];
+    const joins = ast.from?.filter((item) => item.join) || [];
     if (joins.length > 0) {
         joins.forEach((join) => {
             parts.push(hardline);
             parts.push(formatJoin(join));
         });
     }
-    
+
     // Format WHERE clause
     if (ast.where) {
         parts.push(hardline);
         parts.push("WHERE");
         parts.push(formatWhere(ast.where));
     }
-    
+
     // Add semicolon at the end
     parts.push(";");
-    
+
     return join("", parts);
 }
 
@@ -100,28 +103,28 @@ function formatSelect(ast: AST): doc.builders.DocCommand {
  */
 function formatColumns(columns: any[]): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-    
+
     columns.forEach((column, index) => {
         let formattedColumn = "";
-        
+
         if (column.expr) {
             // Handle complex expressions
-            if (column.expr.type === 'function') {
+            if (column.expr.type === "function") {
                 formattedColumn = formatFunction(column.expr);
-            } else if (column.expr.type === 'column_ref') {
+            } else if (column.expr.type === "column_ref") {
                 formattedColumn = formatColumnRef(column.expr);
-            } else if (column.expr.type === 'star') {
+            } else if (column.expr.type === "star") {
                 formattedColumn = "*";
             } else {
                 formattedColumn = column.expr.value || "";
             }
-            
+
             // Add alias if it exists
             if (column.as) {
                 formattedColumn += ` AS ${column.as}`;
             }
         }
-        
+
         if (index === 0) {
             // First column directly after SELECT
             parts.push(" ");
@@ -133,7 +136,7 @@ function formatColumns(columns: any[]): doc.builders.DocCommand {
             parts.push(formattedColumn.toUpperCase());
         }
     });
-    
+
     return join("", parts);
 }
 
@@ -142,17 +145,17 @@ function formatColumns(columns: any[]): doc.builders.DocCommand {
  */
 function formatFunction(func: any): string {
     if (!func.name) return "";
-    
+
     const funcName = func.name.toUpperCase();
-    
+
     if (func.args && func.args.expr) {
-        if (func.args.expr.type === 'star') {
+        if (func.args.expr.type === "star") {
             return `${funcName}(*)`;
-        } else if (func.args.expr.type === 'column_ref') {
+        } else if (func.args.expr.type === "column_ref") {
             return `${funcName}(${formatColumnRef(func.args.expr)})`;
         }
     }
-    
+
     return funcName + "()";
 }
 
@@ -161,11 +164,11 @@ function formatFunction(func: any): string {
  */
 function formatColumnRef(columnRef: any): string {
     if (!columnRef.column) return "";
-    
+
     if (columnRef.table) {
         return `${columnRef.table}.${columnRef.column}`;
     }
-    
+
     return columnRef.column;
 }
 
@@ -174,28 +177,28 @@ function formatColumnRef(columnRef: any): string {
  */
 function formatFrom(fromItems: any[]): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-    
+
     // Filter out join items as they'll be handled separately
-    const tables = fromItems.filter(item => !item.join);
-    
+    const tables = fromItems.filter((item) => !item.join);
+
     tables.forEach((item, index) => {
         let fromText = "";
-        
+
         if (item.table) {
             fromText = item.table;
-            
+
             if (item.as) {
                 fromText += ` ${item.as}`;
             }
         }
-        
+
         if (index > 0) {
             parts.push(", ");
         }
-        
+
         parts.push(fromText);
     });
-    
+
     return join("", parts);
 }
 
@@ -204,32 +207,32 @@ function formatFrom(fromItems: any[]): doc.builders.DocCommand {
  */
 function formatJoin(join: any): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-    
+
     // Format join type and table
     const joinType = join.join ? join.join.toUpperCase() : "JOIN";
     parts.push(joinType);
     parts.push(" ");
-    
+
     if (join.table) {
         parts.push(join.table);
-        
+
         if (join.as) {
             parts.push(" ");
             parts.push(join.as);
         }
     }
-    
+
     // Format ON condition
     if (join.on) {
         parts.push(" ON ");
-        
-        if (join.on.type === 'binary_expr') {
+
+        if (join.on.type === "binary_expr") {
             parts.push(formatBinaryExpression(join.on));
         } else {
             parts.push(join.on.value || "");
         }
     }
-    
+
     return join("", parts);
 }
 
@@ -238,13 +241,13 @@ function formatJoin(join: any): doc.builders.DocCommand {
  */
 function formatWhere(where: any): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-    
+
     if (!where) return join("", parts);
-    
-    if (where.type === 'binary_expr') {
+
+    if (where.type === "binary_expr") {
         const operator = where.operator.toUpperCase();
-        
-        if (['AND', 'OR'].includes(operator)) {
+
+        if (["AND", "OR"].includes(operator)) {
             // Format complex conditions with AND/OR
             parts.push(" ");
             parts.push(formatBinaryExpressionWithIndent(where));
@@ -257,7 +260,7 @@ function formatWhere(where: any): doc.builders.DocCommand {
         parts.push(" ");
         parts.push(where.value || "");
     }
-    
+
     return join("", parts);
 }
 
@@ -265,20 +268,18 @@ function formatWhere(where: any): doc.builders.DocCommand {
  * Format a binary expression
  */
 function formatBinaryExpression(expr: any): string {
-    if (!expr || expr.type !== 'binary_expr') {
+    if (!expr || expr.type !== "binary_expr") {
         return expr?.value || "";
     }
-    
-    const left = expr.left.type === 'binary_expr' 
-        ? formatBinaryExpression(expr.left) 
-        : formatExpressionValue(expr.left);
-        
-    const right = expr.right.type === 'binary_expr' 
-        ? formatBinaryExpression(expr.right) 
-        : formatExpressionValue(expr.right);
-    
+
+    const left =
+        expr.left.type === "binary_expr" ? formatBinaryExpression(expr.left) : formatExpressionValue(expr.left);
+
+    const right =
+        expr.right.type === "binary_expr" ? formatBinaryExpression(expr.right) : formatExpressionValue(expr.right);
+
     const operator = expr.operator;
-    
+
     return `${left} ${operator} ${right}`;
 }
 
@@ -286,28 +287,28 @@ function formatBinaryExpression(expr: any): string {
  * Format binary expressions with indentation for AND/OR operators
  */
 function formatBinaryExpressionWithIndent(expr: any): doc.builders.DocCommand {
-    if (!expr || expr.type !== 'binary_expr') {
+    if (!expr || expr.type !== "binary_expr") {
         return expr?.value || "";
     }
-    
+
     const parts: doc.builders.DocCommand[] = [];
     const operator = expr.operator.toUpperCase();
-    
-    if (['AND', 'OR'].includes(operator)) {
+
+    if (["AND", "OR"].includes(operator)) {
         // Left side of the expression
-        if (expr.left.type === 'binary_expr' && ['AND', 'OR'].includes(expr.left.operator.toUpperCase())) {
+        if (expr.left.type === "binary_expr" && ["AND", "OR"].includes(expr.left.operator.toUpperCase())) {
             parts.push(formatBinaryExpressionWithIndent(expr.left));
         } else {
             parts.push(formatBinaryExpression(expr.left));
         }
-        
+
         // AND/OR operator and right side with indent
         parts.push(hardline);
         parts.push("  ");
         parts.push(operator);
         parts.push(" ");
-        
-        if (expr.right.type === 'binary_expr' && ['AND', 'OR'].includes(expr.right.operator.toUpperCase())) {
+
+        if (expr.right.type === "binary_expr" && ["AND", "OR"].includes(expr.right.operator.toUpperCase())) {
             parts.push(formatBinaryExpression(expr.right.left));
             parts.push(hardline);
             parts.push("  ");
@@ -321,7 +322,7 @@ function formatBinaryExpressionWithIndent(expr: any): doc.builders.DocCommand {
         // Simple binary expression
         parts.push(formatBinaryExpression(expr));
     }
-    
+
     return join("", parts);
 }
 
@@ -330,16 +331,16 @@ function formatBinaryExpressionWithIndent(expr: any): doc.builders.DocCommand {
  */
 function formatExpressionValue(expr: any): string {
     if (!expr) return "";
-    
-    if (expr.type === 'column_ref') {
+
+    if (expr.type === "column_ref") {
         return formatColumnRef(expr);
-    } else if (expr.type === 'string') {
+    } else if (expr.type === "string") {
         return `'${expr.value.toLowerCase()}'`;
-    } else if (expr.type === 'number') {
+    } else if (expr.type === "number") {
         return expr.value.toString();
-    } else if (expr.type === 'function') {
+    } else if (expr.type === "function") {
         return formatFunction(expr);
     }
-    
+
     return expr.value || "";
 }

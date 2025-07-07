@@ -1,5 +1,5 @@
-import { Parser } from 'node-sql-parser';
-import { SQLNode, Location } from './types';
+import { Parser } from "node-sql-parser";
+import { SQLNode, Location } from "./types";
 
 export class SQLParser {
     private static parser = new Parser();
@@ -12,10 +12,10 @@ export class SQLParser {
         const cleanText = text.trim();
 
         try {
-            const ast = this.parser.astify(cleanText, { database: 'generic' });
-            
+            const ast = this.parser.astify(cleanText, { database: "generic" });
+
             return {
-                type: 'sql',
+                type: "sql",
                 text: cleanText,
                 ast,
                 loc: {
@@ -26,7 +26,7 @@ export class SQLParser {
         } catch (error) {
             // Return a minimal node if parsing fails
             return {
-                type: 'sql',
+                type: "sql",
                 text: cleanText,
                 ast: [],
                 loc: {
