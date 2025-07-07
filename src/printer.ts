@@ -1,5 +1,6 @@
 import { doc } from "prettier";
-import { Node, NodeType, SQLNode, Location } from "./types";
+import { SQLNode } from "./types";
+import { AST } from "node-sql-parser";
 
 const { join, indent, hardline } = doc.builders;
 
@@ -7,256 +8,338 @@ const { join, indent, hardline } = doc.builders;
  * Format SQL AST into a pretty-printed string
  */
 export function print(path: { getValue: () => unknown }): doc.builders.DocCommand {
-    const node = path.getValue() as Record<string, unknown>;
-
-    // If this is a SQL node from a template literal, format it
-    if (hasSqlAst(node)) {
-        // Format the SQL and add a newline after the backtick for template literals
-        const sqlAst = node.sqlAst as SQLNode & { isTemplateLiteral?: boolean };
-        const formattedSql = printSQLNode(sqlAst);
-
-        // For template literals, ensure proper formatting
-        if (sqlAst.isTemplateLiteral) {
-            return [hardline, formattedSql];
-        } else {
-            return formattedSql;
-        }
+    const node = path.getValue() as SQLNode;
+    
+    if (node?.type === 'sql') {
+        return printSQLNode(node);
     }
 
-    // Format a SQL file
-    if (
-        node.type === "sql" &&
-        typeof node.value === "string" &&
-        Array.isArray(node.tokens) &&
-        Array.isArray(node.body) &&
-        node.loc &&
-        typeof node.loc === "object"
-    ) {
-        const sqlNode: SQLNode = {
-            type: String(node.type),
-            value: String(node.value),
-            tokens: node.tokens as string[],
-            body: node.body as Node[],
-            loc: node.loc as Location,
-        };
-        return printSQLNode(sqlNode);
-    }
-
-    // For other nodes in JavaScript/TypeScript
     return "";
 }
 
 /**
- * Type guard for nodes with sqlAst property
- */
-function hasSqlAst(node: Record<string, unknown>): boolean {
-    return "sqlAst" in node && node.sqlAst !== null && typeof node.sqlAst === "object";
-}
-/**
  * Print a SQL node
  */
 function printSQLNode(node: SQLNode): doc.builders.DocCommand {
-    // Format the SQL AST
-    return formatSQLBody(node.body);
+    const ast = node.ast;
+    
+    if (Array.isArray(ast) && ast.length > 0) {
+        // Handle multiple statements
+        return join(hardline + hardline, ast.map(stmt => formatStatement(stmt)));
+    } else if (!Array.isArray(ast)) {
+        // Handle single statement
+        return formatStatement(ast);
+    }
+    
+    // Fallback if no valid AST is provided
+    return "";
 }
 
 /**
- * Format a SQL body
+ * Format a SQL statement based on its type
  */
-function formatSQLBody(nodes: Node[]): doc.builders.DocCommand {
-    const parts: doc.builders.DocCommand[] = [];
-
-    // Process CTEs first
-    const cteNodes = nodes.filter((node) => node.type === NodeType.CTE);
-    if (cteNodes.length > 0) {
-        parts.push("WITH");
-        parts.push(" ");
-
-        cteNodes.forEach((cte, index) => {
-            if (index > 0) {
-                parts.push(hardline);
-                parts.push(", ");
-            }
-
-            parts.push(formatCTE(cte));
-        });
-
-        parts.push(hardline);
+function formatStatement(ast: AST | undefined): doc.builders.DocCommand {
+    if (!ast || !ast.type) {
+        return "";
     }
 
-    // Process SELECT statements
-    const selectNodes = nodes.filter((node) => node.type === NodeType.Select);
-    if (selectNodes.length > 0) {
-        selectNodes.forEach((select, index) => {
-            if (index > 0) {
-                parts.push(hardline);
-            }
-
-            parts.push(formatSelect(select));
-        });
+    switch (ast.type) {
+        case 'select':
+            return formatSelect(ast);
+        default:
+            // For unsupported statement types, return as is
+            return "";
     }
-    return join("", parts);
-}
-
-/**
- * Format a CTE node
- */
-function formatCTE(node: Node): doc.builders.DocCommand {
-    const parts: doc.builders.DocCommand[] = [];
-
-    parts.push(node.name || "");
-    parts.push(" AS (");
-    parts.push(hardline);
-
-    // Format the body of the CTE (usually a SELECT statement)
-    const body = node.body || [];
-    if (body.length > 0) {
-        const selectNodes = body.filter((n) => n.type === NodeType.Select);
-        selectNodes.forEach((selectNode) => {
-            parts.push(indent(""));
-            parts.push(indent(formatSelect(selectNode)));
-        });
-    }
-
-    parts.push(hardline);
-    parts.push(")");
-
-    return join("", parts);
 }
 
 /**
  * Format a SELECT statement
  */
-function formatSelect(node: Node): doc.builders.DocCommand {
+function formatSelect(ast: AST): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-
+    
     // Format SELECT and columns
     parts.push("SELECT");
-
-    if (node.columns && node.columns.length > 0) {
-        parts.push(" ");
-        parts.push(formatColumns(node.columns));
+    
+    if (ast.columns && Array.isArray(ast.columns)) {
+        parts.push(formatColumns(ast.columns));
     }
-
+    
     // Format FROM clause
-    if (node.from) {
+    if (ast.from && Array.isArray(ast.from) && ast.from.length > 0) {
         parts.push(hardline);
-        parts.push("FROM ");
-        parts.push(node.from.toLowerCase());
+        parts.push("FROM");
+        parts.push(" ");
+        parts.push(formatFrom(ast.from));
     }
-
-    // Format JOIN clauses
-    if (node.joins && node.joins.length > 0) {
-        node.joins.forEach((join) => {
+    
+    // Process JOIN conditions - joins are part of the from array in node-sql-parser
+    const joins = ast.from?.filter(item => item.join) || [];
+    if (joins.length > 0) {
+        joins.forEach((join) => {
             parts.push(hardline);
             parts.push(formatJoin(join));
         });
     }
-
+    
     // Format WHERE clause
-    if (node.where && node.where.length > 0) {
+    if (ast.where) {
         parts.push(hardline);
-        parts.push("WHERE ");
-        parts.push(formatWhere(node.where));
+        parts.push("WHERE");
+        parts.push(formatWhere(ast.where));
     }
-
+    
+    // Add semicolon at the end
+    parts.push(";");
+    
     return join("", parts);
 }
 
 /**
  * Format columns in a SELECT statement
  */
-function formatColumns(columns: import("./types").Column[]): doc.builders.DocCommand {
+function formatColumns(columns: any[]): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-
+    
     columns.forEach((column, index) => {
-        let formattedColumn = column.name.toLowerCase();
-
-        // Add alias if it exists
-        if (column.alias) {
-            formattedColumn += " AS " + column.alias;
+        let formattedColumn = "";
+        
+        if (column.expr) {
+            // Handle complex expressions
+            if (column.expr.type === 'function') {
+                formattedColumn = formatFunction(column.expr);
+            } else if (column.expr.type === 'column_ref') {
+                formattedColumn = formatColumnRef(column.expr);
+            } else if (column.expr.type === 'star') {
+                formattedColumn = "*";
+            } else {
+                formattedColumn = column.expr.value || "";
+            }
+            
+            // Add alias if it exists
+            if (column.as) {
+                formattedColumn += ` AS ${column.as}`;
+            }
         }
-
+        
         if (index === 0) {
             // First column directly after SELECT
-            parts.push(formattedColumn);
+            parts.push(" ");
+            parts.push(formattedColumn.toUpperCase());
         } else {
             // Other columns on new lines with aligned commas
-            // 5 spaces indent aligns with the 'T' in SELECT
             parts.push(hardline);
             parts.push("     , ");
-            parts.push(formattedColumn);
+            parts.push(formattedColumn.toUpperCase());
         }
     });
+    
+    return join("", parts);
+}
 
+/**
+ * Format a function expression
+ */
+function formatFunction(func: any): string {
+    if (!func.name) return "";
+    
+    const funcName = func.name.toUpperCase();
+    
+    if (func.args && func.args.expr) {
+        if (func.args.expr.type === 'star') {
+            return `${funcName}(*)`;
+        } else if (func.args.expr.type === 'column_ref') {
+            return `${funcName}(${formatColumnRef(func.args.expr)})`;
+        }
+    }
+    
+    return funcName + "()";
+}
+
+/**
+ * Format a column reference
+ */
+function formatColumnRef(columnRef: any): string {
+    if (!columnRef.column) return "";
+    
+    if (columnRef.table) {
+        return `${columnRef.table}.${columnRef.column}`;
+    }
+    
+    return columnRef.column;
+}
+
+/**
+ * Format FROM clause
+ */
+function formatFrom(fromItems: any[]): doc.builders.DocCommand {
+    const parts: doc.builders.DocCommand[] = [];
+    
+    // Filter out join items as they'll be handled separately
+    const tables = fromItems.filter(item => !item.join);
+    
+    tables.forEach((item, index) => {
+        let fromText = "";
+        
+        if (item.table) {
+            fromText = item.table;
+            
+            if (item.as) {
+                fromText += ` ${item.as}`;
+            }
+        }
+        
+        if (index > 0) {
+            parts.push(", ");
+        }
+        
+        parts.push(fromText);
+    });
+    
     return join("", parts);
 }
 
 /**
  * Format a JOIN clause
  */
-function formatJoin(node: Node): doc.builders.DocCommand {
+function formatJoin(join: any): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-
+    
     // Format join type and table
-    parts.push((node.joinType || "JOIN").toUpperCase());
+    const joinType = join.join ? join.join.toUpperCase() : "JOIN";
+    parts.push(joinType);
     parts.push(" ");
-    parts.push(node.table?.toLowerCase() || "");
-
-    // Format ON condition
-    if (node.condition && node.condition.length > 0) {
-        parts.push(" ON ");
-        parts.push(node.condition.join(" ").toLowerCase());
+    
+    if (join.table) {
+        parts.push(join.table);
+        
+        if (join.as) {
+            parts.push(" ");
+            parts.push(join.as);
+        }
     }
-
+    
+    // Format ON condition
+    if (join.on) {
+        parts.push(" ON ");
+        
+        if (join.on.type === 'binary_expr') {
+            parts.push(formatBinaryExpression(join.on));
+        } else {
+            parts.push(join.on.value || "");
+        }
+    }
+    
     return join("", parts);
 }
 
 /**
- * Format a WHERE clause
+ * Format WHERE clause
  */
-function formatWhere(conditions: string[]): doc.builders.DocCommand {
+function formatWhere(where: any): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-
-    // Check if there are AND or OR operators
-    const andOrIndices: number[] = [];
-    for (let i = 0; i < conditions.length; i++) {
-        if (["AND", "OR"].includes(conditions[i].toUpperCase())) {
-            andOrIndices.push(i);
-        }
-    }
-
-    if (andOrIndices.length === 0) {
-        // Single condition
-        parts.push(conditions.join(" ").toLowerCase());
-        return join("", parts);
-    }
-
-    // Multiple conditions with AND/OR
-    let lastIndex = 0;
-    andOrIndices.forEach((index, i) => {
-        // Add the condition before this AND/OR
-        const condition = conditions.slice(lastIndex, index).join(" ").toLowerCase();
-        if (i === 0) {
-            parts.push(condition);
+    
+    if (!where) return join("", parts);
+    
+    if (where.type === 'binary_expr') {
+        const operator = where.operator.toUpperCase();
+        
+        if (['AND', 'OR'].includes(operator)) {
+            // Format complex conditions with AND/OR
+            parts.push(" ");
+            parts.push(formatBinaryExpressionWithIndent(where));
         } else {
-            parts.push(condition);
+            // Simple binary expression
+            parts.push(" ");
+            parts.push(formatBinaryExpression(where));
         }
-
-        // Add the AND/OR with proper formatting
-        parts.push(hardline);
-        parts.push("  "); // 2-space indent for AND/OR conditions
-        parts.push(conditions[index].toUpperCase());
+    } else {
         parts.push(" ");
-
-        lastIndex = index + 1;
-    });
-
-    // Add the last condition
-    if (lastIndex < conditions.length) {
-        const lastCondition = conditions.slice(lastIndex).join(" ").toLowerCase();
-        parts.push(lastCondition);
+        parts.push(where.value || "");
     }
-
+    
     return join("", parts);
+}
+
+/**
+ * Format a binary expression
+ */
+function formatBinaryExpression(expr: any): string {
+    if (!expr || expr.type !== 'binary_expr') {
+        return expr?.value || "";
+    }
+    
+    const left = expr.left.type === 'binary_expr' 
+        ? formatBinaryExpression(expr.left) 
+        : formatExpressionValue(expr.left);
+        
+    const right = expr.right.type === 'binary_expr' 
+        ? formatBinaryExpression(expr.right) 
+        : formatExpressionValue(expr.right);
+    
+    const operator = expr.operator;
+    
+    return `${left} ${operator} ${right}`;
+}
+
+/**
+ * Format binary expressions with indentation for AND/OR operators
+ */
+function formatBinaryExpressionWithIndent(expr: any): doc.builders.DocCommand {
+    if (!expr || expr.type !== 'binary_expr') {
+        return expr?.value || "";
+    }
+    
+    const parts: doc.builders.DocCommand[] = [];
+    const operator = expr.operator.toUpperCase();
+    
+    if (['AND', 'OR'].includes(operator)) {
+        // Left side of the expression
+        if (expr.left.type === 'binary_expr' && ['AND', 'OR'].includes(expr.left.operator.toUpperCase())) {
+            parts.push(formatBinaryExpressionWithIndent(expr.left));
+        } else {
+            parts.push(formatBinaryExpression(expr.left));
+        }
+        
+        // AND/OR operator and right side with indent
+        parts.push(hardline);
+        parts.push("  ");
+        parts.push(operator);
+        parts.push(" ");
+        
+        if (expr.right.type === 'binary_expr' && ['AND', 'OR'].includes(expr.right.operator.toUpperCase())) {
+            parts.push(formatBinaryExpression(expr.right.left));
+            parts.push(hardline);
+            parts.push("  ");
+            parts.push(expr.right.operator.toUpperCase());
+            parts.push(" ");
+            parts.push(formatExpressionValue(expr.right.right));
+        } else {
+            parts.push(formatBinaryExpression(expr.right));
+        }
+    } else {
+        // Simple binary expression
+        parts.push(formatBinaryExpression(expr));
+    }
+    
+    return join("", parts);
+}
+
+/**
+ * Format an expression value
+ */
+function formatExpressionValue(expr: any): string {
+    if (!expr) return "";
+    
+    if (expr.type === 'column_ref') {
+        return formatColumnRef(expr);
+    } else if (expr.type === 'string') {
+        return `'${expr.value.toLowerCase()}'`;
+    } else if (expr.type === 'number') {
+        return expr.value.toString();
+    } else if (expr.type === 'function') {
+        return formatFunction(expr);
+    }
+    
+    return expr.value || "";
 }
