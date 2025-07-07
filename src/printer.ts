@@ -99,9 +99,6 @@ function formatSQLBody(nodes: Node[]): doc.builders.DocCommand {
 }
 
 /**
- * Special formatting for complex expressions like COUNT(*) AS order_count
- */
-/**
  * Format a CTE node
  */
 function formatCTE(node: Node): doc.builders.DocCommand {
