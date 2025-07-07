@@ -1,6 +1,25 @@
 import { Node, NodeType, SQLNode } from "./types";
 
-export const KEYWORDS = [
+const JOIN_KEYWORDS = ["JOIN", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "OUTER JOIN"];
+const CLAUSE_KEYWORDS = [
+    "SELECT",
+    "FROM",
+    "WHERE",
+    "GROUP",
+    "ORDER",
+    "HAVING",
+    "LIMIT",
+    "JOIN",
+    "LEFT",
+    "RIGHT",
+    "INNER",
+    "OUTER",
+    "UNION",
+    "INTERSECT",
+    "EXCEPT",
+];
+
+const KEYWORDS = [
     "SELECT",
     "FROM",
     "WHERE",
@@ -292,33 +311,14 @@ export class SQLParser {
      * Check if a token is a SQL clause keyword
      */
     static isClauseKeyword(token: string): boolean {
-        const clauseKeywords = [
-            "SELECT",
-            "FROM",
-            "WHERE",
-            "GROUP",
-            "ORDER",
-            "HAVING",
-            "LIMIT",
-            "JOIN",
-            "LEFT",
-            "RIGHT",
-            "INNER",
-            "OUTER",
-            "UNION",
-            "INTERSECT",
-            "EXCEPT",
-        ];
-
-        return clauseKeywords.includes(token.toUpperCase());
+        return CLAUSE_KEYWORDS.includes(token.toUpperCase());
     }
 
     /**
      * Check if a token is a JOIN keyword
      */
     static isJoinKeyword(token: string): boolean {
-        const joinKeywords = ["JOIN", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "OUTER JOIN"];
-        return joinKeywords.some((keyword) => token.toUpperCase().includes(keyword));
+        return JOIN_KEYWORDS.some((keyword) => token.toUpperCase().includes(keyword));
     }
 
     /**
