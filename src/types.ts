@@ -16,7 +16,6 @@ export interface Location {
 export interface Column {
     name: string;
     alias?: string;
-    isFunction?: boolean;
 }
 
 export interface Node {

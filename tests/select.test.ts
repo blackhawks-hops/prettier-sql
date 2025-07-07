@@ -104,6 +104,17 @@ WHERE u.status = 'active';`;
         expect(formatted.trim()).toBe(expected);
     });
 
+    test("understands function", async () => {
+        const unformatted = `select count(*) as total_users, avg(coalesce(age, 20)) as average_age from users where status = 'active';`;
+        const expected = `SELECT COUNT(*) AS total_users
+     , AVG(age) AS average_age
+FROM users
+WHERE status = 'active';`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
     test.skip("formats CTEs", async () => {
         const unformatted = `
       WITH active_users AS (

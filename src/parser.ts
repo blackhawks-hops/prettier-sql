@@ -1,6 +1,5 @@
 import { Node, NodeType, SQLNode } from "./types";
 
-const FUNCTIONS = ["ABS", "AVG", "COUNT", "MAX", "MIN", "SUM", "LENGTH", "TRIM", "UPPER", "LOWER", "NOW", "COALESCE"];
 export const KEYWORDS = [
     "SELECT",
     "FROM",
@@ -163,26 +162,7 @@ export class SQLParser {
             }
         }
 
-        // Handle special cases: parentheses for subqueries and CTEs
-        const processedTokens: string[] = [];
-        for (const token of tokens) {
-            if (this.includesFunction(token)) {
-                // uppercase function names
-                processedTokens.push(token.toUpperCase());
-            } else if (token.includes("(") || token.includes(")")) {
-                // Split token by parentheses but keep the parentheses
-                const parts = token
-                    .split(/([()])/g)
-                    .filter(Boolean)
-                    .map((part) => part.trim())
-                    .filter(Boolean);
-                processedTokens.push(...parts);
-            } else {
-                processedTokens.push(token);
-            }
-        }
-
-        return processedTokens;
+        return tokens;
     }
 
     /**
@@ -192,74 +172,8 @@ export class SQLParser {
         const ast: Node[] = [];
 
         let i = 0;
-        let inCTE = false; // Track if we're inside a WITH clause (CTE)
-        const cteNodes: Node[] = [];
-
-        // Process tokens
         while (i < tokens.length) {
             const token = tokens[i].toUpperCase();
-
-            // Handle WITH statements (CTEs)
-            if (token === "WITH") {
-                inCTE = true;
-                i++;
-                continue; // Move to the next token which should be the CTE name
-            }
-
-            if (inCTE) {
-                // Get CTE name
-                const cteName = tokens[i];
-                i++;
-
-                // Skip AS keyword
-                if (i < tokens.length && tokens[i].toUpperCase() === "AS") {
-                    i++;
-                } else {
-                    // Something went wrong, AS keyword missing
-                    continue;
-                }
-
-                // Parse CTE subquery (inside parentheses)
-                if (i < tokens.length && tokens[i] === "(") {
-                    i++; // Skip opening parenthesis
-
-                    const cteNode: Node = {
-                        type: NodeType.CTE,
-                        name: cteName,
-                        body: [],
-                    };
-
-                    // Collect everything in the CTE subquery until matching closing parenthesis
-                    let depth = 1;
-                    const subqueryTokens: string[] = [];
-
-                    while (i < tokens.length && depth > 0) {
-                        if (tokens[i] === "(") depth++;
-                        else if (tokens[i] === ")") depth--;
-
-                        if (depth > 0) {
-                            subqueryTokens.push(tokens[i]);
-                        }
-                        i++;
-                    }
-
-                    // Parse the CTE subquery tokens to build its own AST
-                    // For most CTEs this will be a SELECT statement
-                    const subqueryAST = this.parseSubquery(subqueryTokens);
-                    cteNode.body = subqueryAST;
-                    cteNodes.push(cteNode);
-
-                    // Check for comma after CTE which indicates another CTE follows
-                    if (i < tokens.length && tokens[i] === ",") {
-                        i++; // Skip the comma
-                    } else {
-                        // No more CTEs, end of WITH clause
-                        inCTE = false;
-                        ast.push(...cteNodes); // Add all CTEs to the AST
-                    }
-                    continue;
-                }
-            }
 
             // Handle SELECT statements
             if (token === "SELECT") {
@@ -344,7 +258,7 @@ export class SQLParser {
                     while (
                         i < tokens.length &&
                         !["GROUP", "ORDER", "LIMIT", "HAVING", "UNION", "INTERSECT", "EXCEPT"].includes(
-                            tokens[i].toUpperCase(),
+                            tokens[i].toUpperCase()
                         )
                     ) {
                         whereConditions.push(tokens[i]);
@@ -517,11 +431,6 @@ export class SQLParser {
      */
     static isValidNode(obj: unknown): obj is Record<string, unknown> {
         return obj !== null && typeof obj === "object";
-    }
-
-    static includesFunction(token: string): boolean {
-        // Check if the token is a function name
-        return FUNCTIONS.some((func) => token.toUpperCase().startsWith(func.toUpperCase()));
     }
 
     /**

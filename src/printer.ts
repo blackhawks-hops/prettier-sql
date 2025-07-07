@@ -116,9 +116,8 @@ function formatCTE(node: Node): doc.builders.DocCommand {
     if (body.length > 0) {
         const selectNodes = body.filter((n) => n.type === NodeType.Select);
         selectNodes.forEach((selectNode) => {
-            // two indents for CTE body
-            parts.push("    ");
-            parts.push(indent(indent(formatSelect(selectNode))));
+            parts.push(indent(""));
+            parts.push(indent(formatSelect(selectNode)));
         });
     }
 
@@ -174,14 +173,7 @@ function formatColumns(columns: import("./types").Column[]): doc.builders.DocCom
     const parts: doc.builders.DocCommand[] = [];
 
     columns.forEach((column, index) => {
-        let formattedColumn = "";
-
-        // Format name (and keep case for functions)
-        if (column.isFunction) {
-            formattedColumn = column.name;
-        } else {
-            formattedColumn = column.name.toLowerCase();
-        }
+        let formattedColumn = column.name.toLowerCase();
 
         // Add alias if it exists
         if (column.alias) {
