@@ -2,7 +2,7 @@ import { doc } from "prettier";
 import { SQLNode } from "./types";
 import { AST } from "node-sql-parser";
 
-const { join, hardline } = doc.builders;
+const { join, hardline, indent } = doc.builders;
 
 /**
  * Format SQL AST into a pretty-printed string
@@ -27,7 +27,7 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
         // Handle multiple statements
         return join(
             hardline + hardline,
-            ast.map((stmt) => formatStatement(stmt))
+            ast.map((stmt) => formatStatement(stmt)),
         );
     } else if (!Array.isArray(ast)) {
         // Handle single statement
@@ -41,14 +41,14 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
 /**
  * Format a SQL statement based on its type
  */
-function formatStatement(ast: AST | undefined): doc.builders.DocCommand {
+function formatStatement(ast: AST | undefined, includeSemicolon: boolean = true): doc.builders.DocCommand {
     if (!ast || !ast.type) {
         return "";
     }
 
     switch (ast.type) {
         case "select":
-            return formatSelect(ast);
+            return formatSelect(ast, includeSemicolon);
         default:
             // For unsupported statement types, return as is
             return "";
@@ -58,8 +58,36 @@ function formatStatement(ast: AST | undefined): doc.builders.DocCommand {
 /**
  * Format a SELECT statement
  */
-function formatSelect(ast: AST): doc.builders.DocCommand {
+function formatSelect(ast: AST, includeSemicolon: boolean = true): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
+    parts.push(hardline);
+
+    // Handle WITH clause if present
+    if (ast.with && ast.with.length > 0) {
+        const withParts: doc.builders.DocCommand[] = [];
+
+        ast.with.forEach((item, index) => {
+            if (index === 0) {
+                withParts.push("WITH ");
+            } else {
+                withParts.push(hardline);
+                withParts.push(", ");
+            }
+
+            if (item.name?.value) {
+                withParts.push(item.name.value);
+                if (item.stmt?.ast) {
+                    withParts.push(" AS (");
+                    withParts.push(indent(formatStatement(item.stmt.ast, false)));
+                    withParts.push(hardline);
+                    withParts.push(")");
+                }
+            }
+        });
+
+        parts.push(join("", withParts));
+        parts.push(hardline);
+    }
 
     // Format SELECT and columns
     parts.push("SELECT");
@@ -92,9 +120,10 @@ function formatSelect(ast: AST): doc.builders.DocCommand {
         parts.push(formatWhere(ast.where));
     }
 
-    // Add semicolon at the end
-    parts.push(";");
-
+    if (includeSemicolon) {
+        parts.push(hardline);
+        parts.push(";");
+    }
     return join("", parts);
 }
 

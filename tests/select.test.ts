@@ -5,6 +5,7 @@ import * as sqlPlugin from "../src";
 // Register the plugin with Prettier
 const options = {
     plugins: [sqlPlugin],
+    tabWidth: 4,
     parser: "sql",
 };
 
@@ -18,7 +19,8 @@ describe("SQL Formatter", () => {
      , name
      , email
 FROM users
-WHERE status = 'active';`;
+WHERE status = 'active'
+;`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
@@ -43,7 +45,8 @@ WHERE status = 'active';`;
 FROM customers
 WHERE status = 'active'
   AND created_at > '2023-01-01'
-  AND country = 'USA';`;
+  AND country = 'USA'
+;`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
@@ -63,7 +66,8 @@ WHERE status = 'active'
      , o.total
 FROM users u
 INNER JOIN orders o ON u.id = o.user_id
-WHERE u.status = 'active';`;
+WHERE u.status = 'active'
+;`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
@@ -79,7 +83,8 @@ FROM products
 WHERE category = 'electronics'
   AND price > 100
   AND stock > 0
-  AND manufacturer = 'Apple';`;
+  AND manufacturer = 'Apple'
+;`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
@@ -98,7 +103,8 @@ WHERE category = 'electronics'
      , o.total AS order_total
 FROM users u
 INNER JOIN orders o ON u.id = o.user_id
-WHERE u.status = 'active';`;
+WHERE u.status = 'active'
+;`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
@@ -109,13 +115,14 @@ WHERE u.status = 'active';`;
         const expected = `SELECT COUNT(*) AS total_users
      , AVG(COALESCE(age, 20)) AS average_age
 FROM users
-WHERE status = 'active';`;
+WHERE status = 'active'
+;`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("formats CTEs", async () => {
+    test("formats CTEs", async () => {
         const unformatted = `
       WITH active_users AS (
         SELECT id, name, email FROM users WHERE status = 'active'
@@ -137,16 +144,17 @@ WHERE status = 'active';`;
 )
 , recent_orders AS (
     SELECT user_id
-         , COUNT(*) as order_count
+         , COUNT(*) AS order_count
     FROM orders
     WHERE created_at > '2023-01-01'
 )
 SELECT u.id
      , u.name
      , u.email
-     , COALESCE(o.order_count, 0) as order_count
+     , COALESCE(o.order_count, 0) AS order_count
 FROM active_users u
-LEFT JOIN recent_orders o ON u.id = o.user_id;`;
+LEFT JOIN recent_orders o ON u.id = o.user_id
+;`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
