@@ -27,7 +27,7 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
         // Handle multiple statements
         return join(
             hardline + hardline,
-            ast.map((stmt) => formatStatement(stmt)),
+            ast.map((stmt) => formatStatement(stmt))
         );
     } else if (!Array.isArray(ast)) {
         // Handle single statement
@@ -111,6 +111,8 @@ function formatColumns(columns: any[]): doc.builders.DocCommand {
             // Handle complex expressions
             if (column.expr.type === "function") {
                 formattedColumn = formatFunction(column.expr);
+            } else if (column.expr.type === "aggr_func") {
+                formattedColumn = formatAggregationFunction(column.expr);
             } else if (column.expr.type === "column_ref") {
                 formattedColumn = formatColumnRef(column.expr);
             } else if (column.expr.type === "star") {
@@ -128,12 +130,12 @@ function formatColumns(columns: any[]): doc.builders.DocCommand {
         if (index === 0) {
             // First column directly after SELECT
             parts.push(" ");
-            parts.push(formattedColumn.toUpperCase());
+            parts.push(formattedColumn);
         } else {
             // Other columns on new lines with aligned commas
             parts.push(hardline);
             parts.push("     , ");
-            parts.push(formattedColumn.toUpperCase());
+            parts.push(formattedColumn);
         }
     });
 
@@ -145,18 +147,84 @@ function formatColumns(columns: any[]): doc.builders.DocCommand {
  */
 function formatFunction(func: any): string {
     if (!func.name) return "";
+    
+    let funcName;
+    
+    // Handle complex name structure
+    if (typeof func.name === 'object' && func.name.name && Array.isArray(func.name.name)) {
+        funcName = func.name.name[0]?.value || '';
+    } else {
+        funcName = func.name;
+    }
+    
+    funcName = funcName.toUpperCase();
 
-    const funcName = func.name.toUpperCase();
-
+    // Handle expr_list arguments structure
+    if (func.args && func.args.type === "expr_list" && Array.isArray(func.args.value)) {
+        const args = func.args.value.map(processArg);
+        return `${funcName}(${args.join(', ')})`;
+    }
+    
+    // Handle standard args.expr structure
     if (func.args && func.args.expr) {
         if (func.args.expr.type === "star") {
             return `${funcName}(*)`;
         } else if (func.args.expr.type === "column_ref") {
             return `${funcName}(${formatColumnRef(func.args.expr)})`;
+        } else {
+            return `${funcName}(${processArg(func.args.expr)})`;
         }
     }
 
     return funcName + "()";
+}
+
+function processArg(arg: any): string {
+    if (arg.type === "function") {
+        // Handle function with complex name structure
+        if (arg.name && typeof arg.name === 'object' && arg.name.name && Array.isArray(arg.name.name)) {
+            // Extract function name from the complex structure and convert to uppercase
+            const funcName = (arg.name.name[0]?.value || '').toUpperCase();
+            
+            // Handle function arguments
+            if (arg.args && arg.args.type === "expr_list" && Array.isArray(arg.args.value)) {
+                const processedArgs = arg.args.value.map(processArg);
+                return `${funcName}(${processedArgs.join(', ')})`;
+            }
+            
+            return `${funcName}()`;
+        }
+        
+        return formatFunction(arg);
+    } else if (arg.type === "column_ref") {
+        return formatColumnRef(arg);
+    } else if (arg.type === "number") {
+        return arg.value.toString();
+    } else if (arg.type === "single_quote_string") {
+        return `'${arg.value}'`;
+    }
+    return arg.value || "";
+}
+
+/**
+ * Format an aggregation function
+ */
+function formatAggregationFunction(func: any): string {
+    if (!func.name) return "";
+
+    const funcName = func.name.toUpperCase();
+
+    if (Array.isArray(func.args)) {
+        const args = func.args.map((arg) => {
+            return processArg(arg);
+        });
+        return `${funcName}(${args.join(", ")})`;
+    } else if (func.args?.expr) {
+        const arg = processArg(func.args?.expr);
+        return `${funcName}(${arg})`;
+    }
+
+    return `${funcName}()`;
 }
 
 /**
@@ -205,31 +273,31 @@ function formatFrom(fromItems: any[]): doc.builders.DocCommand {
 /**
  * Format a JOIN clause
  */
-function formatJoin(join: any): doc.builders.DocCommand {
+function formatJoin(joinDefinition: any): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
 
     // Format join type and table
-    const joinType = join.join ? join.join.toUpperCase() : "JOIN";
+    const joinType = joinDefinition.join ? joinDefinition.join.toUpperCase() : "JOIN";
     parts.push(joinType);
     parts.push(" ");
 
-    if (join.table) {
-        parts.push(join.table);
+    if (joinDefinition.table) {
+        parts.push(joinDefinition.table);
 
-        if (join.as) {
+        if (joinDefinition.as) {
             parts.push(" ");
-            parts.push(join.as);
+            parts.push(joinDefinition.as);
         }
     }
 
     // Format ON condition
-    if (join.on) {
+    if (joinDefinition.on) {
         parts.push(" ON ");
 
-        if (join.on.type === "binary_expr") {
-            parts.push(formatBinaryExpression(join.on));
+        if (joinDefinition.on.type === "binary_expr") {
+            parts.push(formatBinaryExpression(joinDefinition.on));
         } else {
-            parts.push(join.on.value || "");
+            parts.push(joinDefinition.on.value || "");
         }
     }
 
@@ -334,13 +402,12 @@ function formatExpressionValue(expr: any): string {
 
     if (expr.type === "column_ref") {
         return formatColumnRef(expr);
-    } else if (expr.type === "string") {
-        return `'${expr.value.toLowerCase()}'`;
     } else if (expr.type === "number") {
         return expr.value.toString();
     } else if (expr.type === "function") {
-        return formatFunction(expr);
+        return processArg(expr); // Use processArg to handle all function cases
+    } else if (expr.type === "single_quote_string") {
+        return `'${expr.value}'`;
     }
-
     return expr.value || "";
 }

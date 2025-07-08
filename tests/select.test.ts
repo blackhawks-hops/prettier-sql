@@ -43,7 +43,7 @@ WHERE status = 'active';`;
 FROM customers
 WHERE status = 'active'
   AND created_at > '2023-01-01'
-  AND country = 'usa';`;
+  AND country = 'USA';`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
@@ -62,7 +62,7 @@ WHERE status = 'active'
      , o.order_id
      , o.total
 FROM users u
-JOIN orders o ON u.id = o.user_id
+INNER JOIN orders o ON u.id = o.user_id
 WHERE u.status = 'active';`;
 
         const formatted = await prettier.format(unformatted, options);
@@ -79,7 +79,7 @@ FROM products
 WHERE category = 'electronics'
   AND price > 100
   AND stock > 0
-  AND manufacturer = 'apple';`;
+  AND manufacturer = 'Apple';`;
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
@@ -97,7 +97,7 @@ WHERE category = 'electronics'
      , u.name AS user_name
      , o.total AS order_total
 FROM users u
-JOIN orders o ON u.id = o.user_id
+INNER JOIN orders o ON u.id = o.user_id
 WHERE u.status = 'active';`;
 
         const formatted = await prettier.format(unformatted, options);
@@ -107,7 +107,7 @@ WHERE u.status = 'active';`;
     test("understands function", async () => {
         const unformatted = `select count(*) as total_users, avg(coalesce(age, 20)) as average_age from users where status = 'active';`;
         const expected = `SELECT COUNT(*) AS total_users
-     , AVG(age) AS average_age
+     , AVG(COALESCE(age, 20)) AS average_age
 FROM users
 WHERE status = 'active';`;
 

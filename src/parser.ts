@@ -11,30 +11,17 @@ export class SQLParser {
         const lines = text.split("\n");
         const cleanText = text.trim();
 
-        try {
-            const ast = this.parser.astify(cleanText, { database: "generic" });
+        const ast = this.parser.astify(cleanText);
 
-            return {
-                type: "sql",
-                text: cleanText,
-                ast,
-                loc: {
-                    start: { line: 1, column: 0 },
-                    end: { line: lines.length, column: lines[lines.length - 1].length },
-                },
-            };
-        } catch (error) {
-            // Return a minimal node if parsing fails
-            return {
-                type: "sql",
-                text: cleanText,
-                ast: [],
-                loc: {
-                    start: { line: 1, column: 0 },
-                    end: { line: lines.length, column: lines[lines.length - 1].length },
-                },
-            };
-        }
+        return {
+            type: "sql",
+            text: cleanText,
+            ast,
+            loc: {
+                start: { line: 1, column: 0 },
+                end: { line: lines.length, column: lines[lines.length - 1].length },
+            },
+        };
     }
 
     /**
