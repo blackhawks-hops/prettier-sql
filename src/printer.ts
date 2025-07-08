@@ -2,7 +2,7 @@ import { doc } from "prettier";
 import { SQLNode } from "./types";
 import { AST } from "node-sql-parser";
 
-const { join, indent, hardline } = doc.builders;
+const { join, hardline } = doc.builders;
 
 /**
  * Format SQL AST into a pretty-printed string
@@ -27,7 +27,7 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
         // Handle multiple statements
         return join(
             hardline + hardline,
-            ast.map((stmt) => formatStatement(stmt)),
+            ast.map((stmt) => formatStatement(stmt))
         );
     } else if (!Array.isArray(ast)) {
         // Handle single statement
@@ -215,7 +215,7 @@ function formatAggregationFunction(func: any): string {
     const funcName = func.name.toUpperCase();
 
     if (Array.isArray(func.args)) {
-        const args = func.args.map((arg) => {
+        const args = func.args.map((arg: any) => {
             return processArg(arg);
         });
         return `${funcName}(${args.join(", ")})`;

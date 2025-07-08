@@ -1,5 +1,5 @@
 import { Parser } from "node-sql-parser";
-import { SQLNode, Location } from "./types";
+import { SQLNode } from "./types";
 
 export class SQLParser {
     private static parser = new Parser();
