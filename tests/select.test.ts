@@ -9,7 +9,7 @@ const options = {
     parser: "sql",
 };
 
-describe("SQL Formatter", () => {
+describe("SELECT", () => {
     test("formats a simple SELECT statement", async () => {
         const unformatted = `
       select id, name, email from users where status = 'active';
@@ -154,6 +154,28 @@ SELECT u.id
      , COALESCE(o.order_count, 0) AS order_count
 FROM active_users u
 LEFT JOIN recent_orders o ON u.id = o.user_id
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("Multiple queries in one string", async () => {
+        const unformatted = `
+      SELECT id, name FROM users WHERE status = 'active';
+      SELECT id, total FROM orders WHERE status = 'completed';
+    `;
+
+        const expected = `SELECT id
+     , name
+FROM users
+WHERE status = 'active'
+;
+
+SELECT id
+     , total
+FROM orders
+WHERE status = 'completed'
 ;`;
 
         const formatted = await prettier.format(unformatted, options);

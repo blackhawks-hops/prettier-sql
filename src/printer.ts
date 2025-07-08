@@ -24,13 +24,14 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
     const ast = node.ast;
 
     if (Array.isArray(ast) && ast.length > 0) {
-        // Handle multiple statements
-        return join(
-            hardline + hardline,
-            ast.map((stmt) => formatStatement(stmt)),
-        );
-    } else if (!Array.isArray(ast)) {
-        // Handle single statement
+        // multiple statements in one file
+        return ast.map((stmt, index) => {
+            if (index > 0) {
+                return join("", [hardline, formatStatement(stmt)]);
+            }
+            return formatStatement(stmt);
+        });
+    } else {
         return formatStatement(ast);
     }
 
