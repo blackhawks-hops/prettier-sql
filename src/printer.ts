@@ -27,7 +27,7 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
         // Handle multiple statements
         return join(
             hardline + hardline,
-            ast.map((stmt) => formatStatement(stmt))
+            ast.map((stmt) => formatStatement(stmt)),
         );
     } else if (!Array.isArray(ast)) {
         // Handle single statement
@@ -147,24 +147,24 @@ function formatColumns(columns: any[]): doc.builders.DocCommand {
  */
 function formatFunction(func: any): string {
     if (!func.name) return "";
-    
+
     let funcName;
-    
+
     // Handle complex name structure
-    if (typeof func.name === 'object' && func.name.name && Array.isArray(func.name.name)) {
-        funcName = func.name.name[0]?.value || '';
+    if (typeof func.name === "object" && func.name.name && Array.isArray(func.name.name)) {
+        funcName = func.name.name[0]?.value || "";
     } else {
         funcName = func.name;
     }
-    
+
     funcName = funcName.toUpperCase();
 
     // Handle expr_list arguments structure
     if (func.args && func.args.type === "expr_list" && Array.isArray(func.args.value)) {
         const args = func.args.value.map(processArg);
-        return `${funcName}(${args.join(', ')})`;
+        return `${funcName}(${args.join(", ")})`;
     }
-    
+
     // Handle standard args.expr structure
     if (func.args && func.args.expr) {
         if (func.args.expr.type === "star") {
@@ -182,19 +182,19 @@ function formatFunction(func: any): string {
 function processArg(arg: any): string {
     if (arg.type === "function") {
         // Handle function with complex name structure
-        if (arg.name && typeof arg.name === 'object' && arg.name.name && Array.isArray(arg.name.name)) {
+        if (arg.name && typeof arg.name === "object" && arg.name.name && Array.isArray(arg.name.name)) {
             // Extract function name from the complex structure and convert to uppercase
-            const funcName = (arg.name.name[0]?.value || '').toUpperCase();
-            
+            const funcName = (arg.name.name[0]?.value || "").toUpperCase();
+
             // Handle function arguments
             if (arg.args && arg.args.type === "expr_list" && Array.isArray(arg.args.value)) {
                 const processedArgs = arg.args.value.map(processArg);
-                return `${funcName}(${processedArgs.join(', ')})`;
+                return `${funcName}(${processedArgs.join(", ")})`;
             }
-            
+
             return `${funcName}()`;
         }
-        
+
         return formatFunction(arg);
     } else if (arg.type === "column_ref") {
         return formatColumnRef(arg);
