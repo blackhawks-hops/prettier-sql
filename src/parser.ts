@@ -36,7 +36,7 @@ export class SQLParser {
             ast &&
             !Array.isArray(ast) &&
             ast.type === "create" &&
-            ((hasOrReplaceTable && ast.keyword === "table") || (hasOrReplaceView && ast.keyword === "view"))
+            (ast.keyword === "table" || ast.keyword === "view")
         ) {
             // For a single statement
             ast.ignore_replace = "replace";
