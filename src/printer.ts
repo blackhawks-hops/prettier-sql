@@ -167,6 +167,16 @@ function formatCreate(ast: Create): doc.builders.DocCommand {
             parts.push(hardline);
             parts.push(")");
         }
+    } else if (ast.keyword === "view") {
+        parts.push("VIEW ");
+
+        // Add view name
+        if (ast.view?.view) {
+           parts.push(ast.view.view);
+        }
+
+        parts.push(" AS ");
+        parts.push(formatSelect(ast.select, false));
     }
 
     parts.push(hardline);

@@ -67,4 +67,38 @@ WHERE status = 'active'
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Create or replace view", async () => {
+        const unformatted = `CREATE OR REPLACE VIEW active_users AS SELECT id, name FROM users WHERE status = 'active';`;
+
+        const expected = `CREATE OR REPLACE VIEW active_users AS
+SELECT id
+     , name
+FROM users
+WHERE status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test.skip("View with CTEs creation", async () => {
+        const unformatted = `CREATE VIEW user_orders AS WITH recent_orders AS (SELECT * FROM orders WHERE order_date > NOW() - INTERVAL '30 days') SELECT u.id, u.name, ro.total FROM users u JOIN recent_orders ro ON u.id = ro.user_id;`;
+
+        const expected = `CREATE VIEW user_orders AS
+WITH recent_orders AS (
+    SELECT *
+    FROM orders
+    WHERE order_date > NOW() - INTERVAL '30 days'
+)
+SELECT u.id
+     , u.name
+     , ro.total
+FROM users u
+JOIN recent_orders ro ON u.id = ro.user_id
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
