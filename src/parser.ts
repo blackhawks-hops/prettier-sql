@@ -13,36 +13,21 @@ export class SQLParser {
 
         // Preprocessing: Handle "CREATE OR REPLACE TABLE/VIEW" for Snowflake dialect
         let processedText = cleanText;
-        const createOrReplaceTableRegex = /CREATE\s+OR\s+REPLACE\s+TABLE\s+/i;
-        const createOrReplaceViewRegex = /CREATE\s+OR\s+REPLACE\s+VIEW\s+/i;
-
-        // Check if the SQL contains "CREATE OR REPLACE TABLE"
-        if (createOrReplaceTableRegex.test(processedText)) {
-            // Convert it to standard "CREATE TABLE" that the parser can handle
-            // We'll store the original text to preserve it for later output
-            processedText = processedText.replace(createOrReplaceTableRegex, "CREATE TABLE ");
-        }
-
-        // Check if the SQL contains "CREATE OR REPLACE VIEW"
-        if (createOrReplaceViewRegex.test(processedText)) {
-            // Convert it to standard "CREATE VIEW" that the parser can handle
-            processedText = processedText.replace(createOrReplaceViewRegex, "CREATE VIEW ");
+        const createOrReplaceMatch = /CREATE\s+OR\s+REPLACE\s+(TABLE|VIEW)\s+/i.exec(cleanText);
+        if (createOrReplaceMatch) {
+            processedText = processedText.replace(
+                createOrReplaceMatch[0],
+                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `
+            );
         }
 
         // Parse the processed text
         const ast = this.parser.astify(processedText, { type: "snowflake" });
 
-        // If the statement was a "CREATE OR REPLACE TABLE" or "CREATE OR REPLACE VIEW", mark it in the AST
-        const hasOrReplaceTable = createOrReplaceTableRegex.test(cleanText);
-        const hasOrReplaceView = createOrReplaceViewRegex.test(cleanText);
-
-        if ((hasOrReplaceTable || hasOrReplaceView) && ast && Array.isArray(ast) && ast.length > 0) {
+        if (createOrReplaceMatch && ast && Array.isArray(ast) && ast.length > 0) {
             // For array of statements
             ast.forEach((stmt) => {
-                if (
-                    stmt.type === "create" &&
-                    ((hasOrReplaceTable && stmt.keyword === "table") || (hasOrReplaceView && stmt.keyword === "view"))
-                ) {
+                if (stmt.type === "create" && (stmt.keyword === "table" || stmt.keyword === "view")) {
                     // Set the ignore_replace property to indicate this was "OR REPLACE"
                     stmt.ignore_replace = "replace";
                 }
