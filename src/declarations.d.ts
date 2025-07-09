@@ -74,8 +74,19 @@ declare module "node-sql-parser" {
         _next?: Select;
         set_op?: string;
     }
+    
+    export interface Create {
+        type: "create";
+        keyword: string;
+        table: {
+            table: string;
+            db?: string;
+        }[];
+        create_definitions: any[];
+        loc?: LocationRange;
+    }
 
-    export type AST = Select;
+    export type AST = Select | Create;
 
     export class Parser {
         astify(sql: string, options?: { database?: string }): AST | AST[];

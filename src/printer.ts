@@ -1,6 +1,6 @@
 import { doc } from "prettier";
 import { SQLNode } from "./types";
-import { AST } from "node-sql-parser";
+import { AST, Select, Create } from "node-sql-parser";
 
 const { join, hardline, indent } = doc.builders;
 
@@ -24,13 +24,15 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
     const ast = node.ast;
 
     if (Array.isArray(ast) && ast.length > 0) {
-        return ast.map((stmt, index) => {
+        // Use doc.builders.join to join the array of commands with hardlines
+        const formattedStatements = ast.map((stmt, index) => {
             if (index > 0) {
                 return join("", [hardline, formatStatement(stmt)]);
             }
             return formatStatement(stmt);
         });
-    } else {
+        return join("", formattedStatements);
+    } else if (ast && !Array.isArray(ast)) {
         return formatStatement(ast);
     }
 
@@ -47,9 +49,9 @@ function formatStatement(ast: AST | undefined, includeSemicolon: boolean = true)
 
     switch (ast.type) {
         case "select":
-            return formatSelect(ast, includeSemicolon);
+            return formatSelect(ast as Select, includeSemicolon);
         case "create":
-            return formatCreate(ast);
+            return formatCreate(ast as Create);
         default:
             // For unsupported statement types, return as is
             return "";
@@ -59,7 +61,7 @@ function formatStatement(ast: AST | undefined, includeSemicolon: boolean = true)
 /**
  * Format a CREATE statement
  */
-function formatCreate(ast: AST): doc.builders.DocCommand {
+function formatCreate(ast: Create): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
     parts.push("CREATE ");
 
@@ -111,6 +113,25 @@ function formatCreate(ast: AST): doc.builders.DocCommand {
                         columnDefs.push(" PRIMARY KEY");
                     }
 
+                    // Handle COMMENT attribute
+                    if (def.comment) {
+                        columnDefs.push(" COMMENT ");
+                        // Handle nested structure from the parser
+                        if (typeof def.comment === "string") {
+                            columnDefs.push(`'${def.comment}'`);
+                        } else if (def.comment.value && def.comment.value.type === "single_quote_string") {
+                            // Handle the structure we found: {"type":"comment","value":{"type":"single_quote_string","value":"User ID"}}
+                            columnDefs.push(`'${def.comment.value.value}'`);
+                        } else if (def.comment.type === "single_quote_string") {
+                            columnDefs.push(`'${def.comment.value}'`);
+                        } else if (def.comment.value && typeof def.comment.value === "string") {
+                            columnDefs.push(`'${def.comment.value}'`);
+                        } else {
+                            // Fallback that should not be needed now
+                            columnDefs.push("''");
+                        }
+                    }
+
                     // Handle foreign key constraint using reference_definition
                     if (def.reference_definition) {
                         columnDefs.push(" REFERENCES ");
@@ -152,7 +173,7 @@ function formatCreate(ast: AST): doc.builders.DocCommand {
 /**
  * Format a SELECT statement
  */
-function formatSelect(ast: AST, includeSemicolon: boolean = true): doc.builders.DocCommand {
+function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
     parts.push(hardline);
 
@@ -160,7 +181,7 @@ function formatSelect(ast: AST, includeSemicolon: boolean = true): doc.builders.
     if (ast.with && ast.with.length > 0) {
         const withParts: doc.builders.DocCommand[] = [];
 
-        ast.with.forEach((item, index) => {
+        ast.with.forEach((item: any, index: number) => {
             if (index === 0) {
                 withParts.push("WITH ");
             } else {
@@ -199,9 +220,9 @@ function formatSelect(ast: AST, includeSemicolon: boolean = true): doc.builders.
     }
 
     // Process JOIN conditions - joins are part of the from array in node-sql-parser
-    const joins = ast.from?.filter((item) => item.join) || [];
+    const joins = ast.from?.filter((item: any) => item.join) || [];
     if (joins.length > 0) {
-        joins.forEach((join) => {
+        joins.forEach((join: any) => {
             parts.push(hardline);
             parts.push(formatJoin(join));
         });
