@@ -64,7 +64,7 @@ function formatStatement(ast: AST | undefined, includeSemicolon: boolean = true)
 function formatCreate(ast: Create): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
     parts.push("CREATE ");
-    
+
     // Handle OR REPLACE option
     if (ast.ignore_replace === "replace") {
         parts.push("OR REPLACE ");

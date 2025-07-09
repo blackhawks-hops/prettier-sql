@@ -11,11 +11,43 @@ export class SQLParser {
         const lines = text.split("\n");
         const cleanText = text.trim();
 
-        const ast = this.parser.astify(cleanText, { type: "snowflake" });
+        // Preprocessing: Handle "CREATE OR REPLACE TABLE" for Snowflake dialect
+        let processedText = cleanText;
+        const createOrReplaceTableRegex = /CREATE\s+OR\s+REPLACE\s+TABLE\s+/i;
+
+        // Check if the SQL contains "CREATE OR REPLACE TABLE"
+        if (createOrReplaceTableRegex.test(processedText)) {
+            // Convert it to standard "CREATE TABLE" that the parser can handle
+            // We'll store the original text to preserve it for later output
+            processedText = processedText.replace(createOrReplaceTableRegex, "CREATE TABLE ");
+        }
+
+        // Parse the processed text
+        const ast = this.parser.astify(processedText, { type: "snowflake" });
+
+        // If the statement was a "CREATE OR REPLACE TABLE", mark it in the AST
+        if (createOrReplaceTableRegex.test(cleanText) && ast && Array.isArray(ast) && ast.length > 0) {
+            // For array of statements
+            ast.forEach((stmt) => {
+                if (stmt.type === "create" && stmt.keyword === "table") {
+                    // Set the ignore_replace property to indicate this was "OR REPLACE"
+                    stmt.ignore_replace = "replace";
+                }
+            });
+        } else if (
+            createOrReplaceTableRegex.test(cleanText) &&
+            ast &&
+            !Array.isArray(ast) &&
+            ast.type === "create" &&
+            ast.keyword === "table"
+        ) {
+            // For a single statement
+            ast.ignore_replace = "replace";
+        }
 
         return {
             type: "sql",
-            text: cleanText,
+            text: cleanText, // Keep the original text with "OR REPLACE"
             ast,
             loc: {
                 start: { line: 1, column: 0 },

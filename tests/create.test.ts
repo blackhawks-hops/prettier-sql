@@ -40,7 +40,7 @@ describe("CREATE", () => {
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("formats a create or replace statement", async () => {
+    test("formats a create or replace statement", async () => {
         const unformatted = `CREATE OR REPLACE TABLE orders (id INT PRIMARY KEY, user_id INT REFERENCES users(id), order_date DATETIME, total DECIMAL(10,2));`;
         const expected = `CREATE OR REPLACE TABLE orders (
       id INT PRIMARY KEY
@@ -48,6 +48,20 @@ describe("CREATE", () => {
     , order_date DATETIME
     , total DECIMAL(10,2)
 )
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("simple view creation", async () => {
+        const unformatted = `CREATE VIEW active_users AS SELECT id, name FROM users WHERE status = 'active';`;
+
+        const expected = `CREATE VIEW active_users AS
+SELECT id
+     , name
+FROM users
+WHERE status = 'active'
 ;`;
 
         const formatted = await prettier.format(unformatted, options);
