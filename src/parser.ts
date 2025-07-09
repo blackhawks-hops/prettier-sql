@@ -39,9 +39,10 @@ export class SQLParser {
         if ((hasOrReplaceTable || hasOrReplaceView) && ast && Array.isArray(ast) && ast.length > 0) {
             // For array of statements
             ast.forEach((stmt) => {
-                if (stmt.type === "create" &&
-                    ((hasOrReplaceTable && stmt.keyword === "table") ||
-                     (hasOrReplaceView && stmt.keyword === "view"))) {
+                if (
+                    stmt.type === "create" &&
+                    ((hasOrReplaceTable && stmt.keyword === "table") || (hasOrReplaceView && stmt.keyword === "view"))
+                ) {
                     // Set the ignore_replace property to indicate this was "OR REPLACE"
                     stmt.ignore_replace = "replace";
                 }
@@ -50,8 +51,7 @@ export class SQLParser {
             ast &&
             !Array.isArray(ast) &&
             ast.type === "create" &&
-            ((hasOrReplaceTable && ast.keyword === "table") ||
-             (hasOrReplaceView && ast.keyword === "view"))
+            ((hasOrReplaceTable && ast.keyword === "table") || (hasOrReplaceView && ast.keyword === "view"))
         ) {
             // For a single statement
             ast.ignore_replace = "replace";

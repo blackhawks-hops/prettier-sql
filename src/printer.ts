@@ -172,7 +172,7 @@ function formatCreate(ast: Create): doc.builders.DocCommand {
 
         // Add view name
         if (ast.view?.view) {
-           parts.push(ast.view.view);
+            parts.push(ast.view.view);
         }
 
         parts.push(" AS ");
