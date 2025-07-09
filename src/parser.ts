@@ -11,7 +11,7 @@ export class SQLParser {
         const lines = text.split("\n");
         const cleanText = text.trim();
 
-        const ast = this.parser.astify(cleanText);
+        const ast = this.parser.astify(cleanText, { type: "snowflake" });
 
         return {
             type: "sql",

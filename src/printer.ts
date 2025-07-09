@@ -64,6 +64,11 @@ function formatStatement(ast: AST | undefined, includeSemicolon: boolean = true)
 function formatCreate(ast: Create): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
     parts.push("CREATE ");
+    
+    // Handle OR REPLACE option
+    if (ast.ignore_replace === "replace") {
+        parts.push("OR REPLACE ");
+    }
 
     // Handle table creation
     if (ast.keyword === "table") {
@@ -220,7 +225,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
     }
 
     // Process JOIN conditions - joins are part of the from array in node-sql-parser
-    const joins = ast.from?.filter((item: any) => item.join) || [];
+    const joins = Array.isArray(ast.from) ? ast.from.filter((item: any) => item.join) : [];
     if (joins.length > 0) {
         joins.forEach((join: any) => {
             parts.push(hardline);
