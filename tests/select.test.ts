@@ -181,4 +181,24 @@ WHERE status = 'completed'
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test.skip("Simple query with USING shorthand", async () => {
+        const unformatted = `
+      SELECT u.id, u.name, o.total
+      FROM users u
+      JOIN orders o USING (user_id)
+      WHERE u.status = 'active';
+    `;
+
+        const expected = `SELECT u.id
+     , u.name
+     , o.total
+FROM users u
+INNER JOIN orders o USING (user_id)
+WHERE u.status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
