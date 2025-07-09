@@ -24,22 +24,23 @@ export class SQLParser {
         // Parse the processed text
         const ast = this.parser.astify(processedText, { type: "snowflake" });
 
-        if (createOrReplaceMatch && ast && Array.isArray(ast) && ast.length > 0) {
-            // For array of statements
-            ast.forEach((stmt) => {
-                if (stmt.type === "create" && (stmt.keyword === "table" || stmt.keyword === "view")) {
-                    // Set the ignore_replace property to indicate this was "OR REPLACE"
-                    stmt.ignore_replace = "replace";
-                }
-            });
-        } else if (
-            ast &&
-            !Array.isArray(ast) &&
-            ast.type === "create" &&
-            (ast.keyword === "table" || ast.keyword === "view")
-        ) {
-            // For a single statement
-            ast.ignore_replace = "replace";
+        // Post-processing: overload ignore_replace property for "CREATE OR REPLACE"
+        if (createOrReplaceMatch && ast) {
+            if (Array.isArray(ast) && ast.length > 0) {
+                // For array of statements
+                ast.forEach((stmt) => {
+                    if (stmt.type === "create" && (stmt.keyword === "table" || stmt.keyword === "view")) {
+                        // Set the ignore_replace property to indicate this was "OR REPLACE"
+                        stmt.ignore_replace = "replace";
+                    }
+                });
+            } else if (
+                !Array.isArray(ast) &&
+                ast.type === "create" &&
+                (ast.keyword === "table" || ast.keyword === "view")
+            ) {
+                ast.ignore_replace = "replace";
+            }
         }
 
         return {
