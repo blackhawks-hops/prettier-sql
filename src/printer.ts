@@ -24,7 +24,6 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
     const ast = node.ast;
 
     if (Array.isArray(ast) && ast.length > 0) {
-        // multiple statements in one file
         return ast.map((stmt, index) => {
             if (index > 0) {
                 return join("", [hardline, formatStatement(stmt)]);
@@ -35,7 +34,6 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
         return formatStatement(ast);
     }
 
-    // Fallback if no valid AST is provided
     return "";
 }
 
@@ -50,10 +48,105 @@ function formatStatement(ast: AST | undefined, includeSemicolon: boolean = true)
     switch (ast.type) {
         case "select":
             return formatSelect(ast, includeSemicolon);
+        case "create":
+            return formatCreate(ast);
         default:
             // For unsupported statement types, return as is
             return "";
     }
+}
+
+/**
+ * Format a CREATE statement
+ */
+function formatCreate(ast: AST): doc.builders.DocCommand {
+    const parts: doc.builders.DocCommand[] = [];
+    parts.push("CREATE ");
+
+    // Handle table creation
+    if (ast.keyword === "table") {
+        parts.push("TABLE ");
+
+        // Add table name
+        if (ast.table && ast.table.length > 0) {
+            const tableName = ast.table[0].table;
+            if (tableName) {
+                parts.push(tableName);
+            }
+        }
+
+        // Add column definitions
+        if (ast.create_definitions && ast.create_definitions.length > 0) {
+            parts.push(" (");
+
+            // Create column definitions with proper indentation
+            const columnDefs: doc.builders.DocCommand[] = [];
+
+            ast.create_definitions.forEach((def: any, index: number) => {
+                columnDefs.push(hardline);
+                columnDefs.push(index > 0 ? ", " : "  ");
+
+                // Column name
+                if (def.column && def.column.column) {
+                    columnDefs.push(def.column.column);
+                }
+
+                // Data type
+                if (def.definition) {
+                    columnDefs.push(" ");
+                    columnDefs.push(def.definition.dataType);
+
+                    // Handle length/precision
+                    if (def.definition.length && def.definition.parentheses) {
+                        if (def.definition.scale !== undefined) {
+                            // For types like DECIMAL that have precision and scale
+                            columnDefs.push(`(${def.definition.length},${def.definition.scale})`);
+                        } else {
+                            columnDefs.push(`(${def.definition.length})`);
+                        }
+                    }
+
+                    // Handle primary key constraint
+                    if (def.primary_key) {
+                        columnDefs.push(" PRIMARY KEY");
+                    }
+
+                    // Handle foreign key constraint using reference_definition
+                    if (def.reference_definition) {
+                        columnDefs.push(" REFERENCES ");
+
+                        // Handle table name
+                        if (
+                            def.reference_definition.table &&
+                            def.reference_definition.table.length > 0 &&
+                            def.reference_definition.table[0].table
+                        ) {
+                            columnDefs.push(def.reference_definition.table[0].table);
+
+                            // Handle column reference
+                            if (
+                                def.reference_definition.definition &&
+                                def.reference_definition.definition.length > 0 &&
+                                def.reference_definition.definition[0].column
+                            ) {
+                                columnDefs.push(`(${def.reference_definition.definition[0].column})`);
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Add the indented column definitions to the parts array
+            parts.push(indent(join("", columnDefs)));
+            parts.push(hardline);
+            parts.push(")");
+        }
+    }
+
+    parts.push(hardline);
+    parts.push(";");
+
+    return join("", parts);
 }
 
 /**
