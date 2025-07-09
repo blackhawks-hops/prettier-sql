@@ -10,7 +10,16 @@ const options = {
 };
 
 describe("grant", () => {
-    test.skip("Simple grant", async () => {
+    test.skip("Single grant", async () => {
+        const unformatted = `grant usage ON schema instat to role READERS;`;
+
+        const expected = `GRANT USAGE ON SCHEMA instat TO ROLE READERS;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test.skip("Multiple grants", async () => {
         const unformatted = `grant usage ON schema instat to role READERS; grant SELECT ON FUTURE TABLES IN schema instat to role READERS; grant SELECT ON FUTURE VIEWS IN schema instat to role READERS;`;
 
         const expected = `GRANT USAGE ON SCHEMA instat TO ROLE READERS;
