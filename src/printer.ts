@@ -44,14 +44,14 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
     if (Array.isArray(ast) && ast.length > 0) {
         // Format all statements
         const formattedStatements = ast.map((stmt) => formatStatement(stmt));
-        
+
         // Join statements with appropriate spacing based on statement types
         const result: doc.builders.DocCommand[] = [formattedStatements[0]];
-        
+
         for (let i = 1; i < formattedStatements.length; i++) {
-            const prevStmt = ast[i-1];
+            const prevStmt = ast[i - 1];
             const currStmt = ast[i];
-            
+
             // Add blank line between statements based on their types
             if (shouldAddBlankLine(prevStmt, currStmt)) {
                 result.push(hardline);
@@ -59,10 +59,10 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
             } else {
                 result.push(hardline);
             }
-            
+
             result.push(formattedStatements[i]);
         }
-        
+
         return join("", result);
     } else if (ast && !Array.isArray(ast)) {
         return formatStatement(ast);
@@ -96,7 +96,7 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
             if (ast.type === "raw") {
                 return ast.value;
             }
-            
+
             return "";
     }
 }
@@ -116,7 +116,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
     // Handle schema creation
     if (ast.keyword === "schema") {
         parts.push("SCHEMA ");
-        
+
         // Add schema name
         if (ast.schema && ast.schema.schema && ast.schema.schema.length > 0) {
             parts.push(ast.schema.schema[0].value);
@@ -133,7 +133,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         // Add table name
         if (ast.table && ast.table.length > 0) {
             const tableRef = ast.table[0];
-            
+
             // Include schema/database name if available
             if (tableRef.db) {
                 parts.push(`${tableRef.db}.${tableRef.table}`);
@@ -293,7 +293,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             parts.push(hardline);
             parts.push(")");
         }
-    } 
+    }
     // Handle view creation
     else if (ast.keyword === "view") {
         parts.push("VIEW ");
@@ -874,12 +874,12 @@ function shouldAddBlankLine(prevStmt: any, currStmt: any): boolean {
     if (prevStmt.type === "create" && currStmt.type === "create") {
         return true;
     }
-    
+
     // No blank line between consecutive GRANT statements
     if (prevStmt.type === "grant" && currStmt.type === "grant") {
         return false;
     }
-    
+
     // By default, add a blank line between different statement types
     return prevStmt.type !== currStmt.type;
 }
@@ -893,8 +893,10 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
     // If we have a simple statement property, use it directly
     if (ast.statement) {
         // Parse the statement to uppercase keywords while preserving identifier case
-        const statement = ast.statement.replace(/\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi, 
-            (match) => match.toUpperCase());
+        const statement = ast.statement.replace(
+            /\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi,
+            (match) => match.toUpperCase(),
+        );
         parts.push(statement);
         if (!statement.endsWith(";")) {
             parts.push(";");

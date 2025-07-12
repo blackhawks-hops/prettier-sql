@@ -19,9 +19,9 @@ export class SQLParser {
             .split(";")
             .map((stmt) => stmt.trim())
             .filter((stmt) => stmt.length > 0)
-            .map(stmt => stmt + ";");
+            .map((stmt) => stmt + ";");
     }
-    
+
     /**
      * Check if the SQL contains multiple statements
      */
@@ -34,7 +34,7 @@ export class SQLParser {
      */
     static isMultipleGrantStatements(sql: string): boolean {
         const statements = this.splitStatements(sql);
-        return statements.length > 1 && statements.every(stmt => this.isGrantStatement(stmt));
+        return statements.length > 1 && statements.every((stmt) => this.isGrantStatement(stmt));
     }
 
     /**
@@ -80,7 +80,7 @@ export class SQLParser {
         if (this.isMultipleStatements(cleanText)) {
             const statements = this.splitStatements(cleanText);
             const parsedStatements = [];
-            
+
             for (const stmt of statements) {
                 try {
                     if (this.isGrantStatement(stmt)) {
@@ -89,7 +89,7 @@ export class SQLParser {
                     } else {
                         // Handle other statement types through the SQL parser
                         const stmtAst = this.parser.astify(stmt);
-                        
+
                         // stmtAst could be an array (although unlikely for a single statement)
                         if (Array.isArray(stmtAst)) {
                             parsedStatements.push(...stmtAst);
@@ -102,7 +102,7 @@ export class SQLParser {
                     // This ensures we don't completely fail on partially invalid SQL
                     parsedStatements.push({
                         type: "raw",
-                        value: stmt.trim()
+                        value: stmt.trim(),
                     });
                 }
             }
