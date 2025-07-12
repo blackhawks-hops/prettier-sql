@@ -596,7 +596,7 @@ function formatExpressionValue(expr: any): string {
  */
 function formatGrant(ast: GrantAst): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-    
+
     // If we have a simple statement property, use it directly
     if (ast.statement) {
         // Convert the statement to uppercase
@@ -607,16 +607,16 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         }
         return join("", parts);
     }
-    
+
     // Otherwise build from structured data
     parts.push("GRANT");
     parts.push(" ");
-    
+
     // Add privilege
     if (ast.privilege) {
         parts.push(ast.privilege);
     }
-    
+
     // Add ON clause
     if (ast.on_type) {
         parts.push(" ON ");
@@ -624,7 +624,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         parts.push(" ");
         parts.push(ast.on_name);
     }
-    
+
     // Add IN clause if present
     if (ast.in_type) {
         parts.push(" IN ");
@@ -632,7 +632,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         parts.push(" ");
         parts.push(ast.in_name);
     }
-    
+
     // Add TO clause
     if (ast.to_type) {
         parts.push(" TO ");
@@ -640,9 +640,9 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         parts.push(" ");
         parts.push(ast.to_name);
     }
-    
+
     // Add semicolon
     parts.push(";");
-    
+
     return join("", parts);
 }

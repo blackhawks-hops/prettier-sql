@@ -15,8 +15,11 @@ export class SQLParser {
      * Split multiple SQL statements and check if they are all GRANT statements
      */
     static isMultipleGrantStatements(sql: string): boolean {
-        const statements = sql.split(';').map(stmt => stmt.trim()).filter(stmt => stmt.length > 0);
-        return statements.length > 1 && statements.every(stmt => this.isGrantStatement(stmt + ";"));
+        const statements = sql
+            .split(";")
+            .map((stmt) => stmt.trim())
+            .filter((stmt) => stmt.length > 0);
+        return statements.length > 1 && statements.every((stmt) => this.isGrantStatement(stmt + ";"));
     }
 
     /**
@@ -24,14 +27,15 @@ export class SQLParser {
      */
     static parseGrantStatement(sql: string): any {
         // Basic regex pattern to extract parts of the GRANT statement
-        const grantRegex = /^\s*GRANT\s+([^\s]+)\s+ON\s+([^\s]+)\s+([^\s]+)(?:\s+IN\s+([^\s]+)\s+([^\s]+))?\s+TO\s+([^\s]+)\s+([^;]+);?\s*$/i;
+        const grantRegex =
+            /^\s*GRANT\s+([^\s]+)\s+ON\s+([^\s]+)\s+([^\s]+)(?:\s+IN\s+([^\s]+)\s+([^\s]+))?\s+TO\s+([^\s]+)\s+([^;]+);?\s*$/i;
         const match = sql.match(grantRegex);
 
         if (!match) {
             // Return a minimal structure for simple formatting
             return {
                 type: "grant",
-                statement: sql.trim()
+                statement: sql.trim(),
             };
         }
 
@@ -46,7 +50,7 @@ export class SQLParser {
             in_type: inType?.toUpperCase(),
             in_name: inName,
             to_type: toType?.toUpperCase(),
-            to_name: toName.replace(/;$/, "")
+            to_name: toName.replace(/;$/, ""),
         };
     }
 
@@ -59,11 +63,12 @@ export class SQLParser {
 
         // Check if it's multiple GRANT statements
         if (this.isMultipleGrantStatements(cleanText)) {
-            const statements = cleanText.split(';')
-                .map(stmt => stmt.trim())
-                .filter(stmt => stmt.length > 0)
-                .map(stmt => this.parseGrantStatement(stmt + ";"));
-                
+            const statements = cleanText
+                .split(";")
+                .map((stmt) => stmt.trim())
+                .filter((stmt) => stmt.length > 0)
+                .map((stmt) => this.parseGrantStatement(stmt + ";"));
+
             return {
                 type: "sql",
                 text: cleanText,
