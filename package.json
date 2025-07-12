@@ -21,7 +21,6 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
-        "test:ui": "vitest --ui",
         "pretty": "prettier --write src/**/* tests/**/*.ts",
         "lint": "eslint . --ext .ts",
         "typecheck": "tsc --noEmit",
