@@ -98,12 +98,7 @@ export class SQLParser {
                         }
                     }
                 } catch (error) {
-                    // If parsing fails, just add a raw statement object
-                    // This ensures we don't completely fail on partially invalid SQL
-                    parsedStatements.push({
-                        type: "raw",
-                        value: stmt.trim(),
-                    });
+                    throw new Error(`Failed to parse statement: "${stmt}". Error: ${error.message}`);
                 }
             }
 
