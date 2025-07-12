@@ -88,7 +88,8 @@ CREATE OR REPLACE TABLE ahl.contract (
     , dob DATE
     , hash VARCHAR(32)
     , last_updated DATETIME DEFAULT CURRENT_TIMESTAMP()
-);
+)
+;
 
 CREATE OR REPLACE TABLE ahl.contract_manual (
       team_id_hawks INT NOT NULL
@@ -98,7 +99,8 @@ CREATE OR REPLACE TABLE ahl.contract_manual (
     , first_name VARCHAR(50)
     , player_id_hawks INT
     , last_updated DATETIME DEFAULT CURRENT_TIMESTAMP()
-);
+)
+;
 `;
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected.trim());

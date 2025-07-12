@@ -70,6 +70,54 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for "CREATE OR REPLACE TABLE/VIEW" Snowflake dialect
+     * Returns an object with the processed text and the match result for post-processing
+     */
+    static preprocessCreateOrReplace(sql: string): {
+        processedText: string;
+        createOrReplaceMatch: RegExpExecArray | null;
+    } {
+        let processedText = sql;
+        const createOrReplaceMatch = /CREATE\s+OR\s+REPLACE\s+(TABLE|VIEW)\s+/i.exec(sql);
+
+        if (createOrReplaceMatch) {
+            processedText = processedText.replace(
+                createOrReplaceMatch[0],
+                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `,
+            );
+        }
+
+        return { processedText, createOrReplaceMatch };
+    }
+
+    /**
+     * Apply post-processing for "CREATE OR REPLACE" statements to set the ignore_replace property
+     */
+    static postprocessCreateOrReplace(ast: any, createOrReplaceMatch: RegExpExecArray | null): any {
+        if (!createOrReplaceMatch || !ast) {
+            return ast;
+        }
+
+        if (Array.isArray(ast) && ast.length > 0) {
+            // For array of statements
+            ast.forEach((stmt) => {
+                if (stmt.type === "create" && (stmt.keyword === "table" || stmt.keyword === "view")) {
+                    // Set the ignore_replace property to indicate this was "OR REPLACE"
+                    stmt.ignore_replace = "replace";
+                }
+            });
+        } else if (
+            !Array.isArray(ast) &&
+            ast.type === "create" &&
+            (ast.keyword === "table" || ast.keyword === "view")
+        ) {
+            ast.ignore_replace = "replace";
+        }
+
+        return ast;
+    }
+
+    /**
      * Parse SQL code into an AST
      */
     static parse(text: string): SQLNode {
@@ -106,14 +154,20 @@ export class SQLParser {
                         // Handle GRANT statement
                         parsedStatements.push(this.parseGrantStatement(sqlOnly));
                     } else {
-                        // Handle other statement types through the SQL parser
-                        const stmtAst = this.parser.astify(sqlOnly);
+                        // Preprocess CREATE OR REPLACE syntax
+                        const { processedText, createOrReplaceMatch } = this.preprocessCreateOrReplace(sqlOnly);
+
+                        // Parse the processed text
+                        const stmtAst = this.parser.astify(processedText);
+
+                        // Apply post-processing for CREATE OR REPLACE
+                        const processedAst = this.postprocessCreateOrReplace(stmtAst, createOrReplaceMatch);
 
                         // stmtAst could be an array (although unlikely for a single statement)
-                        if (Array.isArray(stmtAst)) {
-                            parsedStatements.push(...stmtAst);
+                        if (Array.isArray(processedAst)) {
+                            parsedStatements.push(...processedAst);
                         } else {
-                            parsedStatements.push(stmtAst);
+                            parsedStatements.push(processedAst);
                         }
                     }
                 } catch (error) {
@@ -145,42 +199,19 @@ export class SQLParser {
             };
         }
 
-        // Preprocessing: Handle "CREATE OR REPLACE TABLE/VIEW" for Snowflake dialect
-        let processedText = cleanText;
-        const createOrReplaceMatch = /CREATE\s+OR\s+REPLACE\s+(TABLE|VIEW)\s+/i.exec(cleanText);
-        if (createOrReplaceMatch) {
-            processedText = processedText.replace(
-                createOrReplaceMatch[0],
-                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `
-            );
-        }
+        // Preprocess CREATE OR REPLACE syntax
+        const { processedText, createOrReplaceMatch } = this.preprocessCreateOrReplace(cleanText);
 
         // Parse the processed text
         const ast = this.parser.astify(processedText);
 
-        // Post-processing: overload ignore_replace property for "CREATE OR REPLACE"
-        if (createOrReplaceMatch && ast) {
-            if (Array.isArray(ast) && ast.length > 0) {
-                // For array of statements
-                ast.forEach((stmt) => {
-                    if (stmt.type === "create" && (stmt.keyword === "table" || stmt.keyword === "view")) {
-                        // Set the ignore_replace property to indicate this was "OR REPLACE"
-                        stmt.ignore_replace = "replace";
-                    }
-                });
-            } else if (
-                !Array.isArray(ast) &&
-                ast.type === "create" &&
-                (ast.keyword === "table" || ast.keyword === "view")
-            ) {
-                ast.ignore_replace = "replace";
-            }
-        }
+        // Post-processing for CREATE OR REPLACE
+        const processedAst = this.postprocessCreateOrReplace(ast, createOrReplaceMatch);
 
         return {
             type: "sql",
             text: cleanText, // Keep the original text with "OR REPLACE"
-            ast,
+            ast: processedAst,
             loc: {
                 start: { line: 1, column: 0 },
                 end: { line: lines.length, column: lines[lines.length - 1].length },

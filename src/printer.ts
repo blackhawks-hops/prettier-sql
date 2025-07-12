@@ -88,6 +88,9 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
             return formatUpdate(ast as Update, includeSemicolon);
         case "grant":
             return formatGrant(ast as GrantAst);
+        case "comment":
+            // Handle comment nodes by returning their text content
+            return (ast as any).text || "";
         case "raw":
             return ast.value || "";
         default:
@@ -870,6 +873,11 @@ function formatUpdate(ast: Update, includeSemicolon: boolean = true): doc.builde
  * Determine if a blank line should be added between two statements
  */
 function shouldAddBlankLine(prevStmt: any, currStmt: any): boolean {
+    // Don't add blank lines after comments
+    if (prevStmt.type === "comment") {
+        return false;
+    }
+
     // Always add blank line between CREATE statements
     if (prevStmt.type === "create" && currStmt.type === "create") {
         return true;
