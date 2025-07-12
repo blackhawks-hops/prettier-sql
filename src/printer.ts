@@ -2,6 +2,24 @@ import { doc } from "prettier";
 import { SQLNode } from "./types";
 import { AST, Select, Create } from "node-sql-parser";
 
+// Define our custom AST types
+interface GrantAst {
+    type: "grant";
+    statement?: string;
+    privilege?: string;
+    on_type?: string;
+    on_name?: string;
+    in_type?: string;
+    in_name?: string;
+    to_type?: string;
+    to_name?: string;
+}
+
+interface CustomCreate extends Create {
+    view?: { view?: string };
+    select?: any;
+}
+
 const { join, hardline, indent } = doc.builders;
 
 /**
@@ -42,7 +60,7 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
 /**
  * Format a SQL statement based on its type
  */
-function formatStatement(ast: AST | undefined, includeSemicolon: boolean = true): doc.builders.DocCommand {
+function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: boolean = true): doc.builders.DocCommand {
     if (!ast || !ast.type) {
         return "";
     }
@@ -52,6 +70,8 @@ function formatStatement(ast: AST | undefined, includeSemicolon: boolean = true)
             return formatSelect(ast as Select, includeSemicolon);
         case "create":
             return formatCreate(ast as Create);
+        case "grant":
+            return formatGrant(ast as GrantAst);
         default:
             // For unsupported statement types, return as is
             return "";
@@ -61,7 +81,7 @@ function formatStatement(ast: AST | undefined, includeSemicolon: boolean = true)
 /**
  * Format a CREATE statement
  */
-function formatCreate(ast: Create): doc.builders.DocCommand {
+function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
     parts.push("CREATE ");
 
@@ -569,4 +589,60 @@ function formatExpressionValue(expr: any): string {
         return `'${expr.value}'`;
     }
     return expr.value || "";
+}
+
+/**
+ * Format a GRANT statement
+ */
+function formatGrant(ast: GrantAst): doc.builders.DocCommand {
+    const parts: doc.builders.DocCommand[] = [];
+    
+    // If we have a simple statement property, use it directly
+    if (ast.statement) {
+        // Convert the statement to uppercase
+        const statement = ast.statement.toUpperCase();
+        parts.push(statement);
+        if (!statement.endsWith(";")) {
+            parts.push(";");
+        }
+        return join("", parts);
+    }
+    
+    // Otherwise build from structured data
+    parts.push("GRANT");
+    parts.push(" ");
+    
+    // Add privilege
+    if (ast.privilege) {
+        parts.push(ast.privilege);
+    }
+    
+    // Add ON clause
+    if (ast.on_type) {
+        parts.push(" ON ");
+        parts.push(ast.on_type);
+        parts.push(" ");
+        parts.push(ast.on_name);
+    }
+    
+    // Add IN clause if present
+    if (ast.in_type) {
+        parts.push(" IN ");
+        parts.push(ast.in_type);
+        parts.push(" ");
+        parts.push(ast.in_name);
+    }
+    
+    // Add TO clause
+    if (ast.to_type) {
+        parts.push(" TO ");
+        parts.push(ast.to_type);
+        parts.push(" ");
+        parts.push(ast.to_name);
+    }
+    
+    // Add semicolon
+    parts.push(";");
+    
+    return join("", parts);
 }
