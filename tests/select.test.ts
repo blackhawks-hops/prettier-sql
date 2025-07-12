@@ -182,7 +182,7 @@ WHERE status = 'completed'
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Simple query with USING shorthand", async () => {
+    test("Simple query with USING shorthand", async () => {
         const unformatted = `
       SELECT u.id, u.name, o.total
       FROM users u
