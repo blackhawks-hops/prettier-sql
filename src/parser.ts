@@ -83,12 +83,31 @@ export class SQLParser {
 
             for (const stmt of statements) {
                 try {
-                    if (this.isGrantStatement(stmt)) {
+                    const trimmedStmt = stmt.trim();
+
+                    const leadingCommentRegex = /^(--.*\n)+/;
+                    const commentMatch = trimmedStmt.match(leadingCommentRegex);
+                    const comments = commentMatch ? commentMatch[0].trim() : "";
+
+                    if (comments) {
+                        // If there are leading comments, include them in the AST
+                        parsedStatements.push({
+                            type: "comment",
+                            text: comments,
+                            loc: {
+                                start: { line: 1, column: 0 },
+                                end: { line: 1, column: comments.length },
+                            },
+                        });
+                    }
+
+                    const sqlOnly = comments ? trimmedStmt.replace(leadingCommentRegex, "").trim() : trimmedStmt;
+                    if (this.isGrantStatement(sqlOnly)) {
                         // Handle GRANT statement
-                        parsedStatements.push(this.parseGrantStatement(stmt));
+                        parsedStatements.push(this.parseGrantStatement(sqlOnly));
                     } else {
                         // Handle other statement types through the SQL parser
-                        const stmtAst = this.parser.astify(stmt);
+                        const stmtAst = this.parser.astify(sqlOnly);
 
                         // stmtAst could be an array (although unlikely for a single statement)
                         if (Array.isArray(stmtAst)) {
@@ -132,7 +151,7 @@ export class SQLParser {
         if (createOrReplaceMatch) {
             processedText = processedText.replace(
                 createOrReplaceMatch[0],
-                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `,
+                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `
             );
         }
 
