@@ -102,4 +102,12 @@ JOIN recent_orders ro ON u.id = ro.user_id
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Create a schema", async () => {
+        const unformatted = `create schema my_schema;`;
+        const expected = `CREATE SCHEMA my_schema;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

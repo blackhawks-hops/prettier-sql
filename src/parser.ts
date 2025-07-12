@@ -12,14 +12,29 @@ export class SQLParser {
     }
 
     /**
+     * Split SQL into multiple statements
+     */
+    static splitStatements(sql: string): string[] {
+        return sql
+            .split(";")
+            .map((stmt) => stmt.trim())
+            .filter((stmt) => stmt.length > 0)
+            .map(stmt => stmt + ";");
+    }
+    
+    /**
+     * Check if the SQL contains multiple statements
+     */
+    static isMultipleStatements(sql: string): boolean {
+        return this.splitStatements(sql).length > 1;
+    }
+
+    /**
      * Split multiple SQL statements and check if they are all GRANT statements
      */
     static isMultipleGrantStatements(sql: string): boolean {
-        const statements = sql
-            .split(";")
-            .map((stmt) => stmt.trim())
-            .filter((stmt) => stmt.length > 0);
-        return statements.length > 1 && statements.every((stmt) => this.isGrantStatement(stmt + ";"));
+        const statements = this.splitStatements(sql);
+        return statements.length > 1 && statements.every(stmt => this.isGrantStatement(stmt));
     }
 
     /**
@@ -61,18 +76,41 @@ export class SQLParser {
         const lines = text.split("\n");
         const cleanText = text.trim();
 
-        // Check if it's multiple GRANT statements
-        if (this.isMultipleGrantStatements(cleanText)) {
-            const statements = cleanText
-                .split(";")
-                .map((stmt) => stmt.trim())
-                .filter((stmt) => stmt.length > 0)
-                .map((stmt) => this.parseGrantStatement(stmt + ";"));
+        // Check if it's multiple statements
+        if (this.isMultipleStatements(cleanText)) {
+            const statements = this.splitStatements(cleanText);
+            const parsedStatements = [];
+            
+            for (const stmt of statements) {
+                try {
+                    if (this.isGrantStatement(stmt)) {
+                        // Handle GRANT statement
+                        parsedStatements.push(this.parseGrantStatement(stmt));
+                    } else {
+                        // Handle other statement types through the SQL parser
+                        const stmtAst = this.parser.astify(stmt);
+                        
+                        // stmtAst could be an array (although unlikely for a single statement)
+                        if (Array.isArray(stmtAst)) {
+                            parsedStatements.push(...stmtAst);
+                        } else {
+                            parsedStatements.push(stmtAst);
+                        }
+                    }
+                } catch (error) {
+                    // If parsing fails, just add a raw statement object
+                    // This ensures we don't completely fail on partially invalid SQL
+                    parsedStatements.push({
+                        type: "raw",
+                        value: stmt.trim()
+                    });
+                }
+            }
 
             return {
                 type: "sql",
                 text: cleanText,
-                ast: statements,
+                ast: parsedStatements,
                 loc: {
                     start: { line: 1, column: 0 },
                     end: { line: lines.length, column: lines[lines.length - 1].length },

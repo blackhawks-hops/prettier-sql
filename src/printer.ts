@@ -42,14 +42,28 @@ function printSQLNode(node: SQLNode): doc.builders.DocCommand {
     const ast = node.ast;
 
     if (Array.isArray(ast) && ast.length > 0) {
-        // Use doc.builders.join to join the array of commands with hardlines
-        const formattedStatements = ast.map((stmt, index) => {
-            if (index > 0) {
-                return join("", [hardline, formatStatement(stmt)]);
+        // Format all statements
+        const formattedStatements = ast.map((stmt) => formatStatement(stmt));
+        
+        // Join statements with appropriate spacing based on statement types
+        const result: doc.builders.DocCommand[] = [formattedStatements[0]];
+        
+        for (let i = 1; i < formattedStatements.length; i++) {
+            const prevStmt = ast[i-1];
+            const currStmt = ast[i];
+            
+            // Add blank line between statements based on their types
+            if (shouldAddBlankLine(prevStmt, currStmt)) {
+                result.push(hardline);
+                result.push(hardline);
+            } else {
+                result.push(hardline);
             }
-            return formatStatement(stmt);
-        });
-        return join("", formattedStatements);
+            
+            result.push(formattedStatements[i]);
+        }
+        
+        return join("", result);
     } else if (ast && !Array.isArray(ast)) {
         return formatStatement(ast);
     }
@@ -74,8 +88,15 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
             return formatUpdate(ast as Update, includeSemicolon);
         case "grant":
             return formatGrant(ast as GrantAst);
+        case "raw":
+            return ast.value || "";
         default:
             // For unsupported statement types, return as is
+            // Handle raw statement type for statements that couldn't be parsed
+            if (ast.type === "raw") {
+                return ast.value;
+            }
+            
             return "";
     }
 }
@@ -92,15 +113,32 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         parts.push("OR REPLACE ");
     }
 
+    // Handle schema creation
+    if (ast.keyword === "schema") {
+        parts.push("SCHEMA ");
+        
+        // Add schema name
+        if (ast.schema && ast.schema.schema && ast.schema.schema.length > 0) {
+            parts.push(ast.schema.schema[0].value);
+            // Add semicolon right after schema name, without newline
+            parts.push(";");
+            // Return early since we've already added the semicolon
+            return join("", parts);
+        }
+    }
     // Handle table creation
-    if (ast.keyword === "table") {
+    else if (ast.keyword === "table") {
         parts.push("TABLE ");
 
         // Add table name
         if (ast.table && ast.table.length > 0) {
-            const tableName = ast.table[0].table;
-            if (tableName) {
-                parts.push(tableName);
+            const tableRef = ast.table[0];
+            
+            // Include schema/database name if available
+            if (tableRef.db) {
+                parts.push(`${tableRef.db}.${tableRef.table}`);
+            } else if (tableRef.table) {
+                parts.push(tableRef.table);
             }
         }
 
@@ -255,7 +293,9 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             parts.push(hardline);
             parts.push(")");
         }
-    } else if (ast.keyword === "view") {
+    } 
+    // Handle view creation
+    else if (ast.keyword === "view") {
         parts.push("VIEW ");
 
         // Add view name
@@ -267,7 +307,10 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         parts.push(formatSelect(ast.select, false));
     }
 
-    parts.push(hardline);
+    // We don't add a hardline for schema creation
+    if (ast.keyword !== "schema") {
+        parts.push(hardline);
+    }
     parts.push(";");
 
     return join("", parts);
@@ -823,13 +866,35 @@ function formatUpdate(ast: Update, includeSemicolon: boolean = true): doc.builde
 /**
  * Format a GRANT statement
  */
+/**
+ * Determine if a blank line should be added between two statements
+ */
+function shouldAddBlankLine(prevStmt: any, currStmt: any): boolean {
+    // Always add blank line between CREATE statements
+    if (prevStmt.type === "create" && currStmt.type === "create") {
+        return true;
+    }
+    
+    // No blank line between consecutive GRANT statements
+    if (prevStmt.type === "grant" && currStmt.type === "grant") {
+        return false;
+    }
+    
+    // By default, add a blank line between different statement types
+    return prevStmt.type !== currStmt.type;
+}
+
+/**
+ * Format a GRANT statement
+ */
 function formatGrant(ast: GrantAst): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
 
     // If we have a simple statement property, use it directly
     if (ast.statement) {
-        // Convert the statement to uppercase
-        const statement = ast.statement.toUpperCase();
+        // Parse the statement to uppercase keywords while preserving identifier case
+        const statement = ast.statement.replace(/\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi, 
+            (match) => match.toUpperCase());
         parts.push(statement);
         if (!statement.endsWith(";")) {
             parts.push(";");

@@ -28,4 +28,15 @@ GRANT SELECT ON FUTURE VIEWS IN SCHEMA instat TO ROLE READERS;`;
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Admin grants", async () => {
+        const unformatted = `GRANT CREATE TABLE, USAGE, MONITOR ON SCHEMA ahl TO ROLE ACCOUNTADMIN; GRANT DELETE, INSERT, REBUILD, REFERENCES, SELECT, TRUNCATE, UPDATE ON FUTURE TABLES IN SCHEMA ahl TO ROLE ACCOUNTADMIN; GRANT DELETE, INSERT, REBUILD, REFERENCES, SELECT, TRUNCATE, UPDATE ON FUTURE VIEWS IN SCHEMA ahl TO ROLE ACCOUNTADMIN;`;
+
+        const expected = `GRANT CREATE TABLE, USAGE, MONITOR ON SCHEMA ahl TO ROLE ACCOUNTADMIN;
+GRANT DELETE, INSERT, REBUILD, REFERENCES, SELECT, TRUNCATE, UPDATE ON FUTURE TABLES IN SCHEMA ahl TO ROLE ACCOUNTADMIN;
+GRANT DELETE, INSERT, REBUILD, REFERENCES, SELECT, TRUNCATE, UPDATE ON FUTURE VIEWS IN SCHEMA ahl TO ROLE ACCOUNTADMIN;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
