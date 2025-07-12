@@ -492,6 +492,26 @@ function formatJoin(joinDefinition: any): doc.builders.DocCommand {
             parts.push(joinItem.on.value || "");
         }
     }
+    // Format USING clause
+    else if (joinItem.using) {
+        parts.push(" USING (");
+        
+        if (Array.isArray(joinItem.using)) {
+            // Join multiple columns with commas
+            const columns = joinItem.using.map((item: any) => item.value || '').join(", ");
+            parts.push(columns);
+        } else if (typeof joinItem.using === 'string') {
+            parts.push(joinItem.using);
+        } else if (joinItem.using.value) {
+            // Single object case with value
+            parts.push(joinItem.using.value);
+        } else if (joinItem.using.column) {
+            // Fallback to column if exists
+            parts.push(joinItem.using.column);
+        }
+        
+        parts.push(")");
+    }
 
     return join("", parts);
 }
