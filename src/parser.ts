@@ -99,7 +99,7 @@ export class SQLParser {
         if (createOrReplaceMatch) {
             processedText = processedText.replace(
                 createOrReplaceMatch[0],
-                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `
+                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `,
             );
         }
 

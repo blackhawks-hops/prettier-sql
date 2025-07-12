@@ -10,14 +10,14 @@ const options = {
 };
 
 describe("UPDATE", () => {
-    test.skip("Simple update", async () => {
+    test("Simple update", async () => {
         const unformatted = `
       update public.player set birthday = current_date, last_updated = current_timestamp where id > 1000;
     `;
 
         const expected = `UPDATE public.player
-   SET birthday = current_date
-     , last_updated = current_timestamp
+   SET birthday = CURRENT_DATE
+     , last_updated = CURRENT_TIMESTAMP
 WHERE id > 1000
 ;`;
 
@@ -25,7 +25,7 @@ WHERE id > 1000
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Update from subquery", async () => {
+    test("Update from subquery", async () => {
         const unformatted = `
       update public.player set birthday = current_date, last_updated = current_timestamp where id in (select id from public.player where id > 1000);
     `;

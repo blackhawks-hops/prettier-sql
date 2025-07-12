@@ -9,7 +9,7 @@ const options = {
     parser: "sql",
 };
 
-describe("grant", () => {
+describe("GRANT", () => {
     test("Single grant", async () => {
         const unformatted = `grant usage on schema instat to role READERS;`;
         const expected = `GRANT USAGE ON SCHEMA instat TO ROLE READERS;`;

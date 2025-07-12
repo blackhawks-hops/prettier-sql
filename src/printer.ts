@@ -1,6 +1,6 @@
 import { doc } from "prettier";
 import { SQLNode } from "./types";
-import { AST, Select, Create } from "node-sql-parser";
+import { AST, Select, Create, Update } from "node-sql-parser";
 
 // Define our custom AST types
 interface GrantAst {
@@ -70,6 +70,8 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
             return formatSelect(ast as Select, includeSemicolon);
         case "create":
             return formatCreate(ast as Create);
+        case "update":
+            return formatUpdate(ast as Update, includeSemicolon);
         case "grant":
             return formatGrant(ast as GrantAst);
         default:
@@ -431,11 +433,19 @@ function formatFrom(fromItems: any[]): doc.builders.DocCommand {
     tables.forEach((item, index) => {
         let fromText = "";
 
-        if (item.table) {
-            fromText = item.table;
+        // Use type assertion for the properties we know exist in our actual data
+        const tableItem = item as any;
 
-            if (item.as) {
-                fromText += ` ${item.as}`;
+        if (tableItem.table) {
+            // Include database name if provided
+            if (tableItem.db) {
+                fromText = `${tableItem.db}.${tableItem.table}`;
+            } else {
+                fromText = tableItem.table;
+            }
+
+            if (tableItem.as) {
+                fromText += ` ${tableItem.as}`;
             }
         }
 
@@ -460,23 +470,26 @@ function formatJoin(joinDefinition: any): doc.builders.DocCommand {
     parts.push(joinType);
     parts.push(" ");
 
-    if (joinDefinition.table) {
-        parts.push(joinDefinition.table);
+    // Use type assertion for the properties we know exist in our actual data
+    const joinItem = joinDefinition as any;
 
-        if (joinDefinition.as) {
+    if (joinItem.table) {
+        parts.push(joinItem.table);
+
+        if (joinItem.as) {
             parts.push(" ");
-            parts.push(joinDefinition.as);
+            parts.push(joinItem.as);
         }
     }
 
     // Format ON condition
-    if (joinDefinition.on) {
+    if (joinItem.on) {
         parts.push(" ON ");
 
-        if (joinDefinition.on.type === "binary_expr") {
-            parts.push(formatBinaryExpression(joinDefinition.on));
+        if (joinItem.on.type === "binary_expr") {
+            parts.push(formatBinaryExpression(joinItem.on));
         } else {
-            parts.push(joinDefinition.on.value || "");
+            parts.push(joinItem.on.value || "");
         }
     }
 
@@ -498,10 +511,45 @@ function formatWhere(where: any): doc.builders.DocCommand {
             // Format complex conditions with AND/OR
             parts.push(" ");
             parts.push(formatBinaryExpressionWithIndent(where));
+        } else if (operator === "IN") {
+            // Special handling for IN clause with subquery
+            parts.push(" ");
+            parts.push(formatExpressionValue(where.left)); // Column or expression on left side
+            parts.push(" IN ");
+
+            // Check if the right side is an expr_list containing a subquery
+            if (where.right && where.right.type === "expr_list" && where.right.value && where.right.value.length > 0) {
+                const subquery = where.right.value[0];
+                if (subquery && subquery.ast && subquery.ast.type === "select") {
+                    parts.push("(");
+                    parts.push(indent(formatSelect(subquery.ast, false)));
+                    parts.push(hardline);
+                    parts.push(")");
+                    return join("", parts);
+                }
+            }
+
+            // Standard binary expression format if not a subquery
+            parts.push(formatExpressionValue(where.right));
         } else {
             // Simple binary expression
             parts.push(" ");
             parts.push(formatBinaryExpression(where));
+        }
+    } else if (where.type === "function" && where.name?.name?.[0]?.value === "IN") {
+        // Special handling for IN clause with subquery (alternative format)
+        parts.push(" ");
+        parts.push(formatExpressionValue(where.left)); // Column or expression on left side
+        parts.push(" IN ");
+
+        // Format the subquery
+        if (where.right && where.right.ast && where.right.ast.type === "select") {
+            parts.push("(");
+            parts.push(indent(formatSelect(where.right.ast, false)));
+            parts.push(hardline);
+            parts.push(")");
+        } else {
+            parts.push(formatExpressionValue(where.right));
         }
     } else {
         parts.push(" ");
@@ -584,11 +632,106 @@ function formatExpressionValue(expr: any): string {
     } else if (expr.type === "number") {
         return expr.value.toString();
     } else if (expr.type === "function") {
+        // Special case for common SQL functions that don't use parentheses
+        if (expr.name?.name?.[0]?.value) {
+            const funcName = expr.name.name[0].value.toUpperCase();
+            if (["CURRENT_DATE", "CURRENT_TIMESTAMP"].includes(funcName)) {
+                return funcName;
+            }
+        }
         return processArg(expr); // Use processArg to handle all function cases
     } else if (expr.type === "single_quote_string") {
         return `'${expr.value}'`;
     }
     return expr.value || "";
+}
+
+/**
+ * Format a GRANT statement
+ */
+/**
+ * Format an UPDATE statement
+ */
+function formatUpdate(ast: Update, includeSemicolon: boolean = true): doc.builders.DocCommand {
+    const parts: doc.builders.DocCommand[] = [];
+
+    // UPDATE keyword
+    parts.push("UPDATE");
+
+    // Table name
+    if (ast.table && ast.table.length > 0) {
+        parts.push(" ");
+        // Use type assertion for the table properties
+        const tableName = ast.table[0] as any;
+        if (tableName.db) {
+            parts.push(`${tableName.db}.${tableName.table}`);
+        } else {
+            parts.push(tableName.table);
+        }
+        // Add alias if provided
+        if (tableName.as) {
+            parts.push(" ");
+            parts.push(tableName.as);
+        }
+    }
+
+    // SET clause with column assignments
+    if (ast.set && ast.set.length > 0) {
+        parts.push(hardline);
+        parts.push("   SET");
+
+        ast.set.forEach((setItem, index) => {
+            if (index === 0) {
+                parts.push(" ");
+            } else {
+                parts.push(hardline);
+                parts.push("     , ");
+            }
+
+            // Column name
+            parts.push(setItem.column);
+            parts.push(" = ");
+
+            // Value
+            if (setItem.value) {
+                if (setItem.value.type === "function") {
+                    // Special case for common SQL functions that don't use parentheses
+                    if (setItem.value.name?.name?.[0]?.value) {
+                        const funcName = setItem.value.name.name[0].value.toUpperCase();
+                        if (["CURRENT_DATE", "CURRENT_TIMESTAMP"].includes(funcName)) {
+                            parts.push(funcName);
+                        } else {
+                            parts.push(formatFunction(setItem.value));
+                        }
+                    } else {
+                        parts.push(formatFunction(setItem.value));
+                    }
+                } else if (setItem.value.type === "column_ref") {
+                    parts.push(formatColumnRef(setItem.value));
+                } else if (setItem.value.type === "binary_expr") {
+                    parts.push(formatBinaryExpression(setItem.value));
+                } else {
+                    // Other value types
+                    parts.push(setItem.value.value || "");
+                }
+            }
+        });
+    }
+
+    // WHERE clause
+    if (ast.where) {
+        parts.push(hardline);
+        parts.push("WHERE");
+        parts.push(formatWhere(ast.where));
+    }
+
+    // Semicolon
+    if (includeSemicolon) {
+        parts.push(hardline);
+        parts.push(";");
+    }
+
+    return join("", parts);
 }
 
 /**
