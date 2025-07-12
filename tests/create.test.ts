@@ -11,13 +11,14 @@ const options = {
 
 describe("CREATE", () => {
     test("formats a simple create statement", async () => {
-        const unformatted = `CREATE TABLE users (id INT PRIMARY KEY comment 'User ID', name VARCHAR(100), email VARCHAR(100), status VARCHAR(20));`;
+        const unformatted = `CREATE TABLE users (id INT PRIMARY KEY comment 'User ID', name VARCHAR(100) not null, email VARCHAR(100), status VARCHAR(20), last_updated datetime default current_timestamp());`;
 
         const expected = `CREATE TABLE users (
       id INT PRIMARY KEY COMMENT 'User ID'
-    , name VARCHAR(100)
+    , name VARCHAR(100) NOT NULL
     , email VARCHAR(100)
     , status VARCHAR(20)
+    , last_updated DATETIME DEFAULT CURRENT_TIMESTAMP()
 )
 ;`;
 

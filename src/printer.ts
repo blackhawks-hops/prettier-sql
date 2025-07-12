@@ -140,6 +140,72 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                         columnDefs.push(" PRIMARY KEY");
                     }
 
+                    // Handle NOT NULL constraint
+                    if (def.definition.nullable === false) {
+                        columnDefs.push(" NOT NULL");
+                    }
+
+                    // Handle NOT NULL constraint
+                    if (def.nullable && def.nullable.value === "not null") {
+                        columnDefs.push(" NOT NULL");
+                    }
+
+                    // Handle DEFAULT value
+                    if (def.default_val) {
+                        columnDefs.push(" DEFAULT ");
+
+                        // Handle different default value types
+                        if (def.default_val.value && def.default_val.value.type === "function") {
+                            // For function calls like CURRENT_TIMESTAMP()
+                            // Extract function name and convert to uppercase
+                            let funcName = "";
+                            if (typeof def.default_val.value.name === "string") {
+                                funcName = def.default_val.value.name.toUpperCase();
+                            } else if (
+                                def.default_val.value.name?.name &&
+                                Array.isArray(def.default_val.value.name.name)
+                            ) {
+                                // Handle complex function name structure
+                                funcName = (def.default_val.value.name.name[0]?.value || "").toUpperCase();
+                            }
+
+                            if (def.default_val.value.args) {
+                                columnDefs.push(`${funcName}()`);
+                            } else {
+                                columnDefs.push(funcName);
+                            }
+                        } else if (def.default_val.value && typeof def.default_val.value === "string") {
+                            // For string literals
+                            columnDefs.push(`'${def.default_val.value}'`);
+                        } else if (def.default_val.value && def.default_val.value.value) {
+                            // For structured values
+                            columnDefs.push(def.default_val.value.value);
+                        } else {
+                            // Fallback
+                            columnDefs.push(def.default_val.value);
+                        }
+                    }
+
+                    // Handle DEFAULT value
+                    if (def.definition.default_val) {
+                        columnDefs.push(" DEFAULT ");
+
+                        // Handle different default value types
+                        if (typeof def.definition.default_val === "string") {
+                            columnDefs.push(def.definition.default_val.toUpperCase());
+                        } else if (def.definition.default_val.type === "function") {
+                            // Format function call for DEFAULT
+                            const funcName = def.definition.default_val.name.toUpperCase();
+                            if (def.definition.default_val.args && def.definition.default_val.args.length > 0) {
+                                columnDefs.push(`${funcName}(${def.definition.default_val.args.join(", ")})`);
+                            } else {
+                                columnDefs.push(`${funcName}()`);
+                            }
+                        } else {
+                            columnDefs.push(def.definition.default_val.value || "");
+                        }
+                    }
+
                     // Handle COMMENT attribute
                     if (def.comment) {
                         columnDefs.push(" COMMENT ");
