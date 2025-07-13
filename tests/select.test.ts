@@ -201,4 +201,40 @@ WHERE u.status = 'active'
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Casting types in SELECT", async () => {
+        const unformatted = `
+      SELECT id, name, created_at::DATE AS created_date
+      FROM users
+      WHERE status = 'active';
+    `;
+
+        const expected = `SELECT id
+     , name
+     , created_at::DATE AS created_date
+FROM users
+WHERE status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("RANK and ROW_NUMBER functions", async () => {
+        const unformatted = `
+      SELECT id, name, RANK() OVER (ORDER BY created_at DESC) AS ranky
+      FROM users
+      WHERE status = 'active';
+    `;
+
+        const expected = `SELECT id
+     , name
+     , RANK() OVER (ORDER BY created_at DESC) AS ranky
+FROM users
+WHERE status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

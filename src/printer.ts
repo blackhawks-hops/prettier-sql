@@ -458,6 +458,85 @@ function formatFunction(func: any): string {
 
     funcName = funcName.toUpperCase();
 
+    // Handle window functions with OVER clause
+    if (func.over) {
+        // Check for arguments
+        let result;
+        if (func.args && func.args.type === "expr_list" && Array.isArray(func.args.value)) {
+            const args = func.args.value.map(processArg);
+            result = `${funcName}(${args.join(", ")})`;
+        } else if (func.args && func.args.expr) {
+            if (func.args.expr.type === "star") {
+                result = `${funcName}(*)`;
+            } else if (func.args.expr.type === "column_ref") {
+                result = `${funcName}(${formatColumnRef(func.args.expr)})`;
+            } else {
+                result = `${funcName}(${processArg(func.args.expr)})`;
+            }
+        } else {
+            result = `${funcName}()`;
+        }
+
+        // Format OVER clause
+        result += " OVER (";
+
+        // Handle ORDER BY in OVER clause
+        // Check for both the old and new AST formats
+        const windowSpec = func.over.as_window_specification?.window_specification;
+        const orderBy = windowSpec?.orderby || func.over.order_by;
+
+        if (orderBy) {
+            result += "ORDER BY ";
+
+            if (Array.isArray(orderBy)) {
+                const orderParts = orderBy.map((item: any) => {
+                    let orderStr = "";
+
+                    if (item.expr && item.expr.type === "column_ref") {
+                        orderStr = formatColumnRef(item.expr);
+                    } else if (item.expr && item.expr.value) {
+                        orderStr = item.expr.value;
+                    }
+
+                    if (item.type) {
+                        orderStr += ` ${item.type.toUpperCase()}`;
+                    }
+
+                    return orderStr;
+                });
+
+                result += orderParts.join(", ");
+            }
+        }
+
+        // Handle PARTITION BY in OVER clause
+        const partitionBy = windowSpec?.partitionby || func.over.partition_by;
+
+        if (partitionBy) {
+            if (orderBy) {
+                result += " ";
+            }
+
+            result += "PARTITION BY ";
+
+            if (Array.isArray(partitionBy)) {
+                const partitionParts = partitionBy.map((item: any) => {
+                    if (item.type === "column_ref") {
+                        return formatColumnRef(item);
+                    } else if (item.value) {
+                        return item.value;
+                    }
+                    return "";
+                });
+
+                result += partitionParts.join(", ");
+            }
+        }
+
+        result += ")";
+        return result;
+    }
+
     // Handle expr_list arguments structure
     if (func.args && func.args.type === "expr_list" && Array.isArray(func.args.value)) {
         const args = func.args.value.map(processArg);
