@@ -238,6 +238,24 @@ WHERE status = 'active'
         expect(formatted.trim()).toBe(expected);
     });
 
+    test("More complex partitioning", async () => {
+        const unformatted = `
+      SELECT id, name, RANK() OVER (PARTITION BY country ORDER BY created_at DESC) AS ranky
+      FROM users
+      WHERE status = 'active';
+    `;
+
+        const expected = `SELECT id
+     , name
+     , RANK() OVER (PARTITION BY country ORDER BY created_at DESC) AS ranky
+FROM users
+WHERE status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
     test("Subquery", async () => {
         const unformatted = `SELECT u.id, u.name from users u join  (SELECT id, name FROM orders) o USING(id)
       WHERE status = 'active';

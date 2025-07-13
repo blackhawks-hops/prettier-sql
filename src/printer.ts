@@ -480,12 +480,45 @@ function formatFunction(func: any): string {
         // Format OVER clause
         result += " OVER (";
 
-        // Handle ORDER BY in OVER clause
-        // Check for both the old and new AST formats
+        // Handle PARTITION BY in OVER clause - must come before ORDER BY
         const windowSpec = func.over.as_window_specification?.window_specification;
+        const partitionBy = windowSpec?.partitionby || func.over.partition_by;
+
+        if (partitionBy) {
+            result += "PARTITION BY ";
+
+            if (Array.isArray(partitionBy)) {
+                const partitionParts = partitionBy.map((item: any) => {
+                    if (item.expr && item.expr.type === "column_ref") {
+                        return formatColumnRef(item.expr);
+                    } else if (item.type === "column_ref") {
+                        return formatColumnRef(item);
+                    } else if (item.column) {
+                        // Handle simple column name
+                        return item.column;
+                    } else if (item.value) {
+                        return item.value;
+                    } else if (typeof item === "string") {
+                        return item;
+                    }
+                    return "";
+                });
+
+                result += partitionParts.join(", ");
+            } else if (typeof partitionBy === "string") {
+                result += partitionBy;
+            }
+        }
+
+        // Handle ORDER BY in OVER clause after PARTITION BY
+        // Check for both the old and new AST formats
         const orderBy = windowSpec?.orderby || func.over.order_by;
 
         if (orderBy) {
+            if (partitionBy) {
+                result += " ";
+            }
+
             result += "ORDER BY ";
 
             if (Array.isArray(orderBy)) {
@@ -506,30 +539,6 @@ function formatFunction(func: any): string {
                 });
 
                 result += orderParts.join(", ");
-            }
-        }
-
-        // Handle PARTITION BY in OVER clause
-        const partitionBy = windowSpec?.partitionby || func.over.partition_by;
-
-        if (partitionBy) {
-            if (orderBy) {
-                result += " ";
-            }
-
-            result += "PARTITION BY ";
-
-            if (Array.isArray(partitionBy)) {
-                const partitionParts = partitionBy.map((item: any) => {
-                    if (item.type === "column_ref") {
-                        return formatColumnRef(item);
-                    } else if (item.value) {
-                        return item.value;
-                    }
-                    return "";
-                });
-
-                result += partitionParts.join(", ");
             }
         }
 
