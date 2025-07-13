@@ -240,14 +240,14 @@ WHERE status = 'active'
 
     test("More complex partitioning", async () => {
         const unformatted = `
-      SELECT id, name, RANK() OVER (PARTITION BY country ORDER BY created_at DESC) AS ranky
+      SELECT id, name, RANK() OVER (PARTITION BY country ORDER BY created_at DESC, name) AS ranky
       FROM users
       WHERE status = 'active';
     `;
 
         const expected = `SELECT id
      , name
-     , RANK() OVER (PARTITION BY country ORDER BY created_at DESC) AS ranky
+     , RANK() OVER (PARTITION BY country ORDER BY created_at DESC, name) AS ranky
 FROM users
 WHERE status = 'active'
 ;`;
