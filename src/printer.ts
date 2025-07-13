@@ -4,7 +4,7 @@ import { AST, Select, Create, Update } from "node-sql-parser";
 
 // Define our custom AST types
 interface GrantAst {
-    type: "grant";
+    type: "grant" | "comment" | "raw";
     statement?: string;
     privilege?: string;
     on_type?: string;
@@ -13,11 +13,16 @@ interface GrantAst {
     in_name?: string;
     to_type?: string;
     to_name?: string;
+    text?: string;
+    value?: string;
 }
 
 interface CustomCreate extends Create {
     view?: { view?: string };
     select?: any;
+    schema?: {
+        schema?: Array<{value: string}>;
+    };
 }
 
 const { join, hardline, indent } = doc.builders;
@@ -90,14 +95,15 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
             return formatGrant(ast as GrantAst);
         case "comment":
             // Handle comment nodes by returning their text content
-            return (ast as any).text || "";
+            return (ast as GrantAst).text || "";
         case "raw":
-            return ast.value || "";
+            return (ast as GrantAst).value || "";
         default:
             // For unsupported statement types, return as is
-            // Handle raw statement type for statements that couldn't be parsed
-            if (ast.type === "raw") {
-                return ast.value;
+            // Check if the ast can be treated as a raw type
+            const astAny = ast as any;
+            if (astAny && astAny.type === "raw" && astAny.value !== undefined) {
+                return astAny.value;
             }
 
             return "";

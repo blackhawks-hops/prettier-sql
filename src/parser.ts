@@ -170,8 +170,9 @@ export class SQLParser {
                             parsedStatements.push(processedAst);
                         }
                     }
-                } catch (error) {
-                    throw new Error(`Failed to parse statement: "${stmt}". Error: ${error.message}`);
+                } catch (error: unknown) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    throw new Error(`Failed to parse statement: "${stmt}". Error: ${errorMessage}`);
                 }
             }
 
