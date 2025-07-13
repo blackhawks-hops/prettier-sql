@@ -83,14 +83,14 @@ WHERE status = 'active'
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("View with CTEs creation", async () => {
-        const unformatted = `CREATE VIEW user_orders AS WITH recent_orders AS (SELECT * FROM orders WHERE order_date > NOW() - INTERVAL '30 days') SELECT u.id, u.name, ro.total FROM users u JOIN recent_orders ro ON u.id = ro.user_id;`;
+    test("View with CTEs creation", async () => {
+        const unformatted = `CREATE VIEW user_orders AS WITH recent_orders AS (SELECT * FROM orders WHERE order_date > '2025-01-01') SELECT u.id, u.name, ro.total FROM users u JOIN recent_orders ro ON u.id = ro.user_id;`;
 
         const expected = `CREATE VIEW user_orders AS
 WITH recent_orders AS (
     SELECT *
     FROM orders
-    WHERE order_date > NOW() - INTERVAL '30 days'
+    WHERE order_date > '2025-01-01'
 )
 SELECT u.id
      , u.name

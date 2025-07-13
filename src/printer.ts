@@ -21,7 +21,7 @@ interface CustomCreate extends Create {
     view?: { view?: string };
     select?: any;
     schema?: {
-        schema?: Array<{value: string}>;
+        schema?: Array<{ value: string }>;
     };
 }
 
@@ -909,7 +909,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         // Parse the statement to uppercase keywords while preserving identifier case
         const statement = ast.statement.replace(
             /\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi,
-            (match) => match.toUpperCase()
+            (match) => match.toUpperCase(),
         );
         parts.push(statement);
         if (!statement.endsWith(";")) {
