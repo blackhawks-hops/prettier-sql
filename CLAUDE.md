@@ -7,6 +7,11 @@ This repository contains a TypeScript project that implements a prettier plugin 
 
 The parser is purly node-sql-parser, while the printer is a very opinionated way to print SQL code with a focus on readability and consistency.
 
+## Key Files
+- `src/index.ts`: Main entry point for the prettier plugin.
+- `src/printer.ts`: Contains the logic for formatting SQL code.
+- `src/parser.ts`: Handles parsing SQL code using node-sql-parser, along with some custom logic.
+
 ## Commands
 
 - Build: `npm run build`

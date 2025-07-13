@@ -922,6 +922,11 @@ function formatBinaryExpression(expr: any, statement?: any): string {
         expr.right.type === "binary_expr" ? formatBinaryExpression(expr.right, statement) : formatExpressionValue(expr.right, statement);
 
     const operator = expr.operator;
+    
+    // Special handling for IS NOT NULL condition
+    if (operator === "IS NOT" && (right === "NULL" || (expr.right && expr.right.type === "null"))) {
+        return `${left} IS NOT NULL`;
+    }
 
     return `${left} ${operator} ${right}`;
 }

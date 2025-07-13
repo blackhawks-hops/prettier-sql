@@ -166,7 +166,7 @@ export class SQLParser {
             ast = [ast];
         }
 
-        ast.forEach((statement) => {
+        ast.forEach((statement: any) => {
             // Add array_accesses property to the root of each statement
             statement.array_accesses = arrayAccesses;
         });

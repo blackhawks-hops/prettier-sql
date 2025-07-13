@@ -297,5 +297,24 @@ LIMIT 10
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
-    })
+    });
+
+    test("NOT NULL checks", async () => {
+        const unformatted = `
+      SELECT id, name, email
+      FROM users
+      WHERE status = 'active' AND email IS NOT NULL;
+    `;
+
+        const expected = `SELECT id
+     , name
+     , email
+FROM users
+WHERE status = 'active'
+  AND email IS NOT NULL
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
