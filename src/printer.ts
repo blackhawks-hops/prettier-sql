@@ -579,7 +579,7 @@ function formatJoin(joinDefinition: any): doc.builders.DocCommand {
 
     // Format join type and table
     const joinType = joinDefinition.join ? joinDefinition.join.toUpperCase() : "JOIN";
-    parts.push(joinType);
+    parts.push(joinType === "INNER JOIN" ? "JOIN" : joinType);
     parts.push(" ");
 
     // Use type assertion for the properties we know exist in our actual data
@@ -903,7 +903,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         // Parse the statement to uppercase keywords while preserving identifier case
         const statement = ast.statement.replace(
             /\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi,
-            (match) => match.toUpperCase(),
+            (match) => match.toUpperCase()
         );
         parts.push(statement);
         if (!statement.endsWith(";")) {

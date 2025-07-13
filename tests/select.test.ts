@@ -65,7 +65,7 @@ WHERE status = 'active'
      , o.order_id
      , o.total
 FROM users u
-INNER JOIN orders o ON u.id = o.user_id
+JOIN orders o ON u.id = o.user_id
 WHERE u.status = 'active'
 ;`;
 
@@ -102,7 +102,7 @@ WHERE category = 'electronics'
      , u.name AS user_name
      , o.total AS order_total
 FROM users u
-INNER JOIN orders o ON u.id = o.user_id
+JOIN orders o ON u.id = o.user_id
 WHERE u.status = 'active'
 ;`;
 
@@ -194,7 +194,7 @@ WHERE status = 'completed'
      , u.name
      , o.total
 FROM users u
-INNER JOIN orders o USING (user_id)
+JOIN orders o USING (user_id)
 WHERE u.status = 'active'
 ;`;
 
