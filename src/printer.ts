@@ -670,7 +670,21 @@ function formatJoin(joinDefinition: any): doc.builders.DocCommand {
     // Use type assertion for the properties we know exist in our actual data
     const joinItem = joinDefinition as any;
 
-    if (joinItem.table) {
+    // Handle subquery in join
+    if (joinItem.expr) {
+        // This is a subquery
+        parts.push("(");
+        if (joinItem.expr.ast && joinItem.expr.ast.type === "select") {
+            parts.push(indent(formatSelect(joinItem.expr.ast, false)));
+            parts.push(hardline);
+        }
+        parts.push(")");
+
+        if (joinItem.as) {
+            parts.push(" ");
+            parts.push(joinItem.as);
+        }
+    } else if (joinItem.table) {
         parts.push(joinItem.table);
 
         if (joinItem.as) {

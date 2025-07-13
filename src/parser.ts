@@ -172,7 +172,7 @@ export class SQLParser {
                     }
                 } catch (error: unknown) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    throw new Error(`Failed to parse statement: "${stmt}". Error: ${errorMessage}`);
+                    throw new Error(`Failed to parse statement:\n\n${stmt}\n\nError: ${errorMessage}`);
                 }
             }
 
@@ -203,21 +203,26 @@ export class SQLParser {
         // Preprocess CREATE OR REPLACE syntax
         const { processedText, createOrReplaceMatch } = this.preprocessCreateOrReplace(cleanText);
 
-        // Parse the processed text
-        const ast = this.parser.astify(processedText);
+        try {
+            // Parse the processed text
+            const ast = this.parser.astify(processedText);
 
-        // Post-processing for CREATE OR REPLACE
-        const processedAst = this.postprocessCreateOrReplace(ast, createOrReplaceMatch);
+            // Post-processing for CREATE OR REPLACE
+            const processedAst = this.postprocessCreateOrReplace(ast, createOrReplaceMatch);
 
-        return {
-            type: "sql",
-            text: cleanText, // Keep the original text with "OR REPLACE"
-            ast: processedAst,
-            loc: {
-                start: { line: 1, column: 0 },
-                end: { line: lines.length, column: lines[lines.length - 1].length },
-            },
-        };
+            return {
+                type: "sql",
+                text: cleanText, // Keep the original text with "OR REPLACE"
+                ast: processedAst,
+                loc: {
+                    start: { line: 1, column: 0 },
+                    end: { line: lines.length, column: lines[lines.length - 1].length },
+                },
+            };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            throw new Error(`Failed to parse SQL:\n\n${cleanText}\n\nError: ${errorMessage}`);
+        }
     }
 
     /**
