@@ -275,4 +275,27 @@ WHERE status = 'active'
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Splits", async () => {
+        const unformatted = `
+      SELECT id, split(name, ',')[0] as name_last, email
+      FROM users
+      WHERE status = 'active' AND split(name, ',')[0] = 'Smith'
+      ORDER BY created_at DESC
+      LIMIT 10;
+    `;
+
+        const expected = `SELECT id
+     , SPLIT(name, ',')[0] AS name_last
+     , email
+FROM users
+WHERE status = 'active'
+  AND SPLIT(name, ',')[0] = 'Smith'
+ORDER BY created_at DESC
+LIMIT 10
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    })
 });

@@ -363,7 +363,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
     parts.push("SELECT");
 
     if (ast.columns && Array.isArray(ast.columns)) {
-        parts.push(formatColumns(ast.columns));
+        parts.push(formatColumns(ast.columns, ast));
     }
 
     // Format FROM clause
@@ -387,7 +387,55 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
     if (ast.where) {
         parts.push(hardline);
         parts.push("WHERE");
-        parts.push(formatWhere(ast.where));
+        parts.push(formatWhere(ast.where, ast));
+    }
+    
+    // Format ORDER BY clause
+    if (ast.orderby && Array.isArray(ast.orderby) && ast.orderby.length > 0) {
+        parts.push(hardline);
+        parts.push("ORDER BY");
+        
+        const orderParts: string[] = [];
+        ast.orderby.forEach((item: any) => {
+            let orderStr = "";
+            
+            if (item.expr) {
+                if (item.expr.type === "column_ref") {
+                    orderStr = formatColumnRef(item.expr);
+                } else if (item.expr.type === "function") {
+                    orderStr = formatFunction(item.expr, ast);
+                } else {
+                    orderStr = item.expr.value || "";
+                }
+            }
+            
+            if (item.type) {
+                orderStr += ` ${item.type}`;
+            }
+            
+            orderParts.push(orderStr);
+        });
+        
+        parts.push(" ");
+        parts.push(orderParts.join(", "));
+    }
+    
+    // Format LIMIT clause
+    if (ast.limit) {
+        parts.push(hardline);
+        parts.push("LIMIT");
+        
+        if (ast.limit.value && Array.isArray(ast.limit.value) && ast.limit.value.length > 0) {
+            parts.push(" ");
+            const limitValues = ast.limit.value.map((item: any) => {
+                if (item.type === "number") {
+                    return item.value.toString();
+                }
+                return item.value || "";
+            });
+            
+            parts.push(limitValues.join(", "));
+        }
     }
 
     if (includeSemicolon) {
@@ -400,7 +448,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
 /**
  * Format columns in a SELECT statement
  */
-function formatColumns(columns: any[]): doc.builders.DocCommand {
+function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
 
     columns.forEach((column, index) => {
@@ -409,7 +457,38 @@ function formatColumns(columns: any[]): doc.builders.DocCommand {
         if (column.expr) {
             // Handle complex expressions
             if (column.expr.type === "function") {
-                formattedColumn = formatFunction(column.expr);
+                // Check if this is an array access function
+                const funcName = typeof column.expr.name === "string" ? column.expr.name : 
+                               (column.expr.name?.name?.[0]?.value || "");
+                
+                if (funcName.includes("__ARRAY_ACCESS_") && statement?.array_accesses) {
+                    // Find the matching array access entry
+                    for (const access of statement.array_accesses) {
+                        if (funcName.includes(access.placeholder.replace(/[()]/g, '')) || 
+                            access.placeholder.includes(funcName.replace(/[()]/g, ''))) {
+                            
+                            // Format the arguments
+                            let argsList = "";
+                            if (column.expr.args && column.expr.args.type === "expr_list" && Array.isArray(column.expr.args.value)) {
+                                argsList = column.expr.args.value.map((a: any) => processArg(a, statement)).join(", ");
+                            }
+                            
+                            // Extract the real function name
+                            const realFuncName = access.original.split("(")[0];
+                            
+                            // Reconstruct with array access syntax
+                            formattedColumn = `${realFuncName.toUpperCase()}(${argsList})[${access.index}]`;
+                            break;
+                        }
+                    }
+                    
+                    // If we didn't find a match, fall back to regular formatting
+                    if (!formattedColumn) {
+                        formattedColumn = formatFunction(column.expr, statement);
+                    }
+                } else {
+                    formattedColumn = formatFunction(column.expr, statement);
+                }
             } else if (column.expr.type === "aggr_func") {
                 formattedColumn = formatAggregationFunction(column.expr);
             } else if (column.expr.type === "column_ref") {
@@ -444,7 +523,7 @@ function formatColumns(columns: any[]): doc.builders.DocCommand {
 /**
  * Format a function expression
  */
-function formatFunction(func: any): string {
+function formatFunction(func: any, statement?: any): string {
     if (!func.name) return "";
 
     let funcName;
@@ -463,7 +542,7 @@ function formatFunction(func: any): string {
         // Check for arguments
         let result;
         if (func.args && func.args.type === "expr_list" && Array.isArray(func.args.value)) {
-            const args = func.args.value.map(processArg);
+            const args = func.args.value.map((arg: any) => processArg(arg, statement));
             result = `${funcName}(${args.join(", ")})`;
         } else if (func.args && func.args.expr) {
             if (func.args.expr.type === "star") {
@@ -471,7 +550,7 @@ function formatFunction(func: any): string {
             } else if (func.args.expr.type === "column_ref") {
                 result = `${funcName}(${formatColumnRef(func.args.expr)})`;
             } else {
-                result = `${funcName}(${processArg(func.args.expr)})`;
+                result = `${funcName}(${processArg(func.args.expr, statement)})`;
             }
         } else {
             result = `${funcName}()`;
@@ -548,7 +627,7 @@ function formatFunction(func: any): string {
 
     // Handle expr_list arguments structure
     if (func.args && func.args.type === "expr_list" && Array.isArray(func.args.value)) {
-        const args = func.args.value.map(processArg);
+        const args = func.args.value.map((arg: any) => processArg(arg, statement));
         return `${funcName}(${args.join(", ")})`;
     }
 
@@ -559,14 +638,43 @@ function formatFunction(func: any): string {
         } else if (func.args.expr.type === "column_ref") {
             return `${funcName}(${formatColumnRef(func.args.expr)})`;
         } else {
-            return `${funcName}(${processArg(func.args.expr)})`;
+            return `${funcName}(${processArg(func.args.expr, statement)})`;
         }
     }
 
     return funcName + "()";
 }
 
-function processArg(arg: any): string {
+function processArg(arg: any, statement?: any): string {
+    // If this is a function, check if it's one of our array access placeholders
+    if (arg.type === "function" && statement?.array_accesses && statement.array_accesses.length > 0) {
+        // Extract the function name - could be either directly in name or in name.name[0].value
+        const funcName = typeof arg.name === "string" ? arg.name : 
+                        (arg.name?.name?.[0]?.value || "");
+        
+        // Check if this function name contains our placeholder pattern "__ARRAY_ACCESS_"
+        if (funcName.includes("__ARRAY_ACCESS_")) {
+            // Find the matching array access entry
+            for (const access of statement.array_accesses) {
+                if (funcName.includes(access.placeholder.replace(/[()]/g, '')) || 
+                    access.placeholder.includes(funcName.replace(/[()]/g, ''))) {
+                    // Format the arguments for the function call
+                    let argsList = "";
+                    if (arg.args && arg.args.type === "expr_list" && Array.isArray(arg.args.value)) {
+                        argsList = arg.args.value.map((a: any) => processArg(a, statement)).join(", ");
+                    }
+                    
+                    // Extract the real function name from the placeholder
+                    const realFuncName = access.original.split("(")[0];
+                    
+                    // Reconstruct the function call with array access syntax
+                    return `${realFuncName.toUpperCase()}(${argsList})[${access.index}]`;
+                }
+            }
+        }
+    }
+    
+    // Handle normal function processing
     if (arg.type === "function") {
         // Handle function with complex name structure
         if (arg.name && typeof arg.name === "object" && arg.name.name && Array.isArray(arg.name.name)) {
@@ -575,14 +683,14 @@ function processArg(arg: any): string {
 
             // Handle function arguments
             if (arg.args && arg.args.type === "expr_list" && Array.isArray(arg.args.value)) {
-                const processedArgs = arg.args.value.map(processArg);
+                const processedArgs = arg.args.value.map((a: any) => processArg(a, statement));
                 return `${funcName}(${processedArgs.join(", ")})`;
             }
 
             return `${funcName}()`;
         }
 
-        return formatFunction(arg);
+        return formatFunction(arg, statement);
     } else if (arg.type === "column_ref") {
         return formatColumnRef(arg);
     } else if (arg.type === "number") {
@@ -739,7 +847,7 @@ function formatJoin(joinDefinition: any): doc.builders.DocCommand {
 /**
  * Format WHERE clause
  */
-function formatWhere(where: any): doc.builders.DocCommand {
+function formatWhere(where: any, statement?: any): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
 
     if (!where) return join("", parts);
@@ -750,11 +858,11 @@ function formatWhere(where: any): doc.builders.DocCommand {
         if (["AND", "OR"].includes(operator)) {
             // Format complex conditions with AND/OR
             parts.push(" ");
-            parts.push(formatBinaryExpressionWithIndent(where));
+            parts.push(formatBinaryExpressionWithIndent(where, statement));
         } else if (operator === "IN") {
             // Special handling for IN clause with subquery
             parts.push(" ");
-            parts.push(formatExpressionValue(where.left)); // Column or expression on left side
+            parts.push(formatExpressionValue(where.left, statement)); // Column or expression on left side
             parts.push(" IN ");
 
             // Check if the right side is an expr_list containing a subquery
@@ -770,16 +878,16 @@ function formatWhere(where: any): doc.builders.DocCommand {
             }
 
             // Standard binary expression format if not a subquery
-            parts.push(formatExpressionValue(where.right));
+            parts.push(formatExpressionValue(where.right, statement));
         } else {
             // Simple binary expression
             parts.push(" ");
-            parts.push(formatBinaryExpression(where));
+            parts.push(formatBinaryExpression(where, statement));
         }
     } else if (where.type === "function" && where.name?.name?.[0]?.value === "IN") {
         // Special handling for IN clause with subquery (alternative format)
         parts.push(" ");
-        parts.push(formatExpressionValue(where.left)); // Column or expression on left side
+        parts.push(formatExpressionValue(where.left, statement)); // Column or expression on left side
         parts.push(" IN ");
 
         // Format the subquery
@@ -789,7 +897,7 @@ function formatWhere(where: any): doc.builders.DocCommand {
             parts.push(hardline);
             parts.push(")");
         } else {
-            parts.push(formatExpressionValue(where.right));
+            parts.push(formatExpressionValue(where.right, statement));
         }
     } else {
         parts.push(" ");
@@ -802,16 +910,16 @@ function formatWhere(where: any): doc.builders.DocCommand {
 /**
  * Format a binary expression
  */
-function formatBinaryExpression(expr: any): string {
+function formatBinaryExpression(expr: any, statement?: any): string {
     if (!expr || expr.type !== "binary_expr") {
         return expr?.value || "";
     }
 
     const left =
-        expr.left.type === "binary_expr" ? formatBinaryExpression(expr.left) : formatExpressionValue(expr.left);
+        expr.left.type === "binary_expr" ? formatBinaryExpression(expr.left, statement) : formatExpressionValue(expr.left, statement);
 
     const right =
-        expr.right.type === "binary_expr" ? formatBinaryExpression(expr.right) : formatExpressionValue(expr.right);
+        expr.right.type === "binary_expr" ? formatBinaryExpression(expr.right, statement) : formatExpressionValue(expr.right, statement);
 
     const operator = expr.operator;
 
@@ -821,7 +929,7 @@ function formatBinaryExpression(expr: any): string {
 /**
  * Format binary expressions with indentation for AND/OR operators
  */
-function formatBinaryExpressionWithIndent(expr: any): doc.builders.DocCommand {
+function formatBinaryExpressionWithIndent(expr: any, statement?: any): doc.builders.DocCommand {
     if (!expr || expr.type !== "binary_expr") {
         return expr?.value || "";
     }
@@ -832,9 +940,9 @@ function formatBinaryExpressionWithIndent(expr: any): doc.builders.DocCommand {
     if (["AND", "OR"].includes(operator)) {
         // Left side of the expression
         if (expr.left.type === "binary_expr" && ["AND", "OR"].includes(expr.left.operator.toUpperCase())) {
-            parts.push(formatBinaryExpressionWithIndent(expr.left));
+            parts.push(formatBinaryExpressionWithIndent(expr.left, statement));
         } else {
-            parts.push(formatBinaryExpression(expr.left));
+            parts.push(formatBinaryExpression(expr.left, statement));
         }
 
         // AND/OR operator and right side with indent
@@ -844,18 +952,18 @@ function formatBinaryExpressionWithIndent(expr: any): doc.builders.DocCommand {
         parts.push(" ");
 
         if (expr.right.type === "binary_expr" && ["AND", "OR"].includes(expr.right.operator.toUpperCase())) {
-            parts.push(formatBinaryExpression(expr.right.left));
+            parts.push(formatBinaryExpression(expr.right.left, statement));
             parts.push(hardline);
             parts.push("  ");
             parts.push(expr.right.operator.toUpperCase());
             parts.push(" ");
-            parts.push(formatExpressionValue(expr.right.right));
+            parts.push(formatExpressionValue(expr.right.right, statement));
         } else {
-            parts.push(formatBinaryExpression(expr.right));
+            parts.push(formatBinaryExpression(expr.right, statement));
         }
     } else {
         // Simple binary expression
-        parts.push(formatBinaryExpression(expr));
+        parts.push(formatBinaryExpression(expr, statement));
     }
 
     return join("", parts);
@@ -864,7 +972,7 @@ function formatBinaryExpressionWithIndent(expr: any): doc.builders.DocCommand {
 /**
  * Format an expression value
  */
-function formatExpressionValue(expr: any): string {
+function formatExpressionValue(expr: any, statement?: any): string {
     if (!expr) return "";
 
     if (expr.type === "column_ref") {
@@ -879,7 +987,7 @@ function formatExpressionValue(expr: any): string {
                 return funcName;
             }
         }
-        return processArg(expr); // Use processArg to handle all function cases
+        return processArg(expr, statement); // Use processArg to handle all function cases
     } else if (expr.type === "single_quote_string") {
         return `'${expr.value}'`;
     }
