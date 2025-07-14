@@ -18,7 +18,7 @@ interface GrantAst {
 }
 
 interface CustomCreate extends Create {
-    view?: { view?: string };
+    view?: { view?: string; db?: string };
     select?: any;
     schema?: {
         schema?: Array<{ value: string }>;
@@ -308,9 +308,9 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         parts.push("VIEW ");
 
         // Include schema/database name if available
-        if (ast.view.db) {
-            parts.push(`${ast.view.db}.${ast.view?.view}`);
-        } else if (ast.view.view) {
+        if (ast.view && ast.view.db) {
+            parts.push(`${ast.view.db}.${ast.view.view || ""}`);
+        } else if (ast.view && ast.view.view) {
             parts.push(ast.view.view);
         }
 
@@ -598,7 +598,7 @@ function formatFunction(func: any, statement?: any): string {
                     if (item.expr && item.expr.type === "column_ref") {
                         orderStr = formatColumnRef(item.expr);
                     } else if (item.expr && item.expr.type === "function") {
-                        orderStr = formatFunction(item.expr, ast);
+                        orderStr = formatFunction(item.expr, statement);
                     } else if (item.expr && item.expr.type === "aggr_func") {
                         orderStr = formatAggregationFunction(item.expr);
                     } else if (item.expr && item.expr.value) {
