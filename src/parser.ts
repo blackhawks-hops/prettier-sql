@@ -83,7 +83,7 @@ export class SQLParser {
         if (createOrReplaceMatch) {
             processedText = processedText.replace(
                 createOrReplaceMatch[0],
-                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `,
+                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `
             );
         }
 
@@ -100,29 +100,22 @@ export class SQLParser {
     } {
         let processedText = sql;
         const arrayAccesses: Array<{ original: string; placeholder: string; index: string }> = [];
-        
+
         // Find all array accesses like function()[0]
         const arrayAccessRegex = /(\w+\([^)]*\))\[(\d+)\]/g;
         let match;
-        let counter = 0;
-        
+
         while ((match = arrayAccessRegex.exec(sql)) !== null) {
-            const original = match[0];  // e.g., SPLIT(name, ',')[0]
-            const funcCall = match[1];  // e.g., SPLIT(name, ',')
-            const index = match[2];     // e.g., 0
-            
-            // Create a placeholder function name that won't conflict
-            const placeholder = `__ARRAY_ACCESS_${counter}_${funcCall}`;
-            
-            // Replace the array access with the placeholder function in the processed text
+            const original = match[0]; // e.g., SPLIT(name, ',')[0]
+            const funcCall = match[1]; // e.g., SPLIT(name, ',')
+            const index = match[2]; // e.g., 0
+
+            const placeholder = `__ARRAYACCESS__${index}__${funcCall}`;
             processedText = processedText.replace(original, placeholder);
-            
             // Store the mapping for post-processing
             arrayAccesses.push({ original, placeholder, index });
-            
-            counter++;
         }
-        
+
         return { processedText, arrayAccesses };
     }
 
@@ -156,7 +149,10 @@ export class SQLParser {
     /**
      * Apply post-processing for array index syntax
      */
-    static postprocessArrayIndexSyntax(ast: any, arrayAccesses: Array<{ original: string; placeholder: string; index: string }>): any {
+    static postprocessArrayIndexSyntax(
+        ast: any,
+        arrayAccesses: Array<{ original: string; placeholder: string; index: string }>
+    ): any {
         if (!ast || arrayAccesses.length === 0) {
             return ast;
         }
@@ -212,17 +208,19 @@ export class SQLParser {
                         parsedStatements.push(this.parseGrantStatement(sqlOnly));
                     } else {
                         // Preprocess CREATE OR REPLACE syntax
-                        const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } = this.preprocessCreateOrReplace(sqlOnly);
-                        
+                        const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
+                            this.preprocessCreateOrReplace(sqlOnly);
+
                         // Preprocess array index syntax
-                        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCreateOrReplace);
+                        const { processedText, arrayAccesses } =
+                            this.preprocessArrayIndexSyntax(textAfterCreateOrReplace);
 
                         // Parse the processed text
                         const stmtAst = this.parser.astify(processedText);
 
                         // Apply post-processing for CREATE OR REPLACE
                         let processedAst = this.postprocessCreateOrReplace(stmtAst, createOrReplaceMatch);
-                        
+
                         // Apply post-processing for array index syntax
                         processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);
 
@@ -264,8 +262,9 @@ export class SQLParser {
         }
 
         // Preprocess CREATE OR REPLACE syntax
-        const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } = this.preprocessCreateOrReplace(cleanText);
-        
+        const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
+            this.preprocessCreateOrReplace(cleanText);
+
         // Preprocess array index syntax
         const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCreateOrReplace);
 
@@ -275,7 +274,7 @@ export class SQLParser {
 
             // Post-processing for CREATE OR REPLACE
             let processedAst = this.postprocessCreateOrReplace(ast, createOrReplaceMatch);
-            
+
             // Post-processing for array index syntax
             processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);
 

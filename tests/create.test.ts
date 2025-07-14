@@ -113,7 +113,7 @@ JOIN recent_orders ro ON u.id = ro.user_id
 
     test("Complex view with ctes, ranking, splits", async () => {
         const unformatted = `CREATE OR REPLACE VIEW eliteprospects.venue AS
-SELECT t.arena_id AS venue_id_eliteprospects, t.arena_name AS venue_name, SPLIT(c.city, ',')[0] as city, t.country_id as country_abbr, t.country_name as country, MAX(last_updated) AS last_updated
+SELECT t.arena_id AS venue_id_eliteprospects, t.arena_name AS venue_name, SPLIT(c.city, ',')[1] as city, t.country_id as country_abbr, t.country_name as country, MAX(last_updated) AS last_updated
 FROM eliteprospects.team t
 WHERE c.city IS NOT NULL
 GROUP BY 1,2,3,4,5
@@ -123,7 +123,7 @@ ORDER BY t.arena_id
         const expected = `CREATE OR REPLACE VIEW eliteprospects.venue AS
 SELECT t.arena_id AS venue_id_eliteprospects
      , t.arena_name AS venue_name
-     , SPLIT(c.city, ',')[0] AS city
+     , SPLIT(c.city, ',')[1] AS city
      , t.country_id AS country_abbr
      , t.country_name AS country
      , MAX(last_updated) AS last_updated

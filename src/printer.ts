@@ -462,40 +462,20 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
                 // Check if this is an array access function
                 const funcName =
                     typeof column.expr.name === "string" ? column.expr.name : column.expr.name?.name?.[0]?.value || "";
+                console.debug(`Processing function: ${funcName}`);
+                console.debug(`Statement array accesses: ${JSON.stringify(statement?.array_accesses)}`);
 
-                if (funcName.includes("__ARRAY_ACCESS_") && statement?.array_accesses) {
-                    // Find the matching array access entry
-                    for (const access of statement.array_accesses) {
-                        if (
-                            funcName.includes(access.placeholder.replace(/[()]/g, "")) ||
-                            access.placeholder.includes(funcName.replace(/[()]/g, ""))
-                        ) {
-                            // Format the arguments
-                            let argsList = "";
-                            if (
-                                column.expr.args &&
-                                column.expr.args.type === "expr_list" &&
-                                Array.isArray(column.expr.args.value)
-                            ) {
-                                argsList = column.expr.args.value.map((a: any) => processArg(a, statement)).join(", ");
-                            }
+                const arrayRegex = /^__ARRAYACCESS__(\d+)__(.+)$/;
+                const match = funcName.match(arrayRegex);
+                if (match) {
+                    const arrayIndex = match[1];
+                    const functionName = match[2].toUpperCase();
 
-                            // Extract the real function name
-                            const realFuncName = access.original.split("(")[0];
-
-                            // Reconstruct with array access syntax
-                            formattedColumn = `${realFuncName.toUpperCase()}(${argsList})[${access.index}]`;
-                            break;
-                        }
-                    }
-
-                    // If we didn't find a match, fall back to regular formatting
-                    if (!formattedColumn) {
-                        formattedColumn = formatFunction(column.expr, statement);
-                    }
+                    formattedColumn = `${functionName}(${column.expr.args?.value.map((arg: any) => processArg(arg, statement)).join(", ")})[${arrayIndex}]`;
                 } else {
                     formattedColumn = formatFunction(column.expr, statement);
                 }
+                console.debug(`Formatted function: ${formattedColumn}`);
             } else if (column.expr.type === "aggr_func") {
                 formattedColumn = formatAggregationFunction(column.expr);
             } else if (column.expr.type === "column_ref") {
@@ -655,11 +635,9 @@ function formatFunction(func: any, statement?: any): string {
 function processArg(arg: any, statement?: any): string {
     // If this is a function, check if it's one of our array access placeholders
     if (arg.type === "function" && statement?.array_accesses && statement.array_accesses.length > 0) {
-        // Extract the function name - could be either directly in name or in name.name[0].value
         const funcName = typeof arg.name === "string" ? arg.name : arg.name?.name?.[0]?.value || "";
 
-        // Check if this function name contains our placeholder pattern "__ARRAY_ACCESS_"
-        if (funcName.includes("__ARRAY_ACCESS_")) {
+        if (funcName.includes("__ARRAYACCESS__")) {
             // Find the matching array access entry
             for (const access of statement.array_accesses) {
                 if (
