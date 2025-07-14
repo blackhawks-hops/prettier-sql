@@ -307,8 +307,10 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
     else if (ast.keyword === "view") {
         parts.push("VIEW ");
 
-        // Add view name
-        if (ast.view?.view) {
+        // Include schema/database name if available
+        if (ast.view.db) {
+            parts.push(`${ast.view.db}.${ast.view?.view}`);
+        } else if (ast.view.view) {
             parts.push(ast.view.view);
         }
 
@@ -389,16 +391,16 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push("WHERE");
         parts.push(formatWhere(ast.where, ast));
     }
-    
+
     // Format ORDER BY clause
     if (ast.orderby && Array.isArray(ast.orderby) && ast.orderby.length > 0) {
         parts.push(hardline);
         parts.push("ORDER BY");
-        
+
         const orderParts: string[] = [];
         ast.orderby.forEach((item: any) => {
             let orderStr = "";
-            
+
             if (item.expr) {
                 if (item.expr.type === "column_ref") {
                     orderStr = formatColumnRef(item.expr);
@@ -408,23 +410,23 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
                     orderStr = item.expr.value || "";
                 }
             }
-            
+
             if (item.type) {
                 orderStr += ` ${item.type}`;
             }
-            
+
             orderParts.push(orderStr);
         });
-        
+
         parts.push(" ");
         parts.push(orderParts.join(", "));
     }
-    
+
     // Format LIMIT clause
     if (ast.limit) {
         parts.push(hardline);
         parts.push("LIMIT");
-        
+
         if (ast.limit.value && Array.isArray(ast.limit.value) && ast.limit.value.length > 0) {
             parts.push(" ");
             const limitValues = ast.limit.value.map((item: any) => {
@@ -433,7 +435,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
                 }
                 return item.value || "";
             });
-            
+
             parts.push(limitValues.join(", "));
         }
     }
@@ -458,30 +460,35 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
             // Handle complex expressions
             if (column.expr.type === "function") {
                 // Check if this is an array access function
-                const funcName = typeof column.expr.name === "string" ? column.expr.name : 
-                               (column.expr.name?.name?.[0]?.value || "");
-                
+                const funcName =
+                    typeof column.expr.name === "string" ? column.expr.name : column.expr.name?.name?.[0]?.value || "";
+
                 if (funcName.includes("__ARRAY_ACCESS_") && statement?.array_accesses) {
                     // Find the matching array access entry
                     for (const access of statement.array_accesses) {
-                        if (funcName.includes(access.placeholder.replace(/[()]/g, '')) || 
-                            access.placeholder.includes(funcName.replace(/[()]/g, ''))) {
-                            
+                        if (
+                            funcName.includes(access.placeholder.replace(/[()]/g, "")) ||
+                            access.placeholder.includes(funcName.replace(/[()]/g, ""))
+                        ) {
                             // Format the arguments
                             let argsList = "";
-                            if (column.expr.args && column.expr.args.type === "expr_list" && Array.isArray(column.expr.args.value)) {
+                            if (
+                                column.expr.args &&
+                                column.expr.args.type === "expr_list" &&
+                                Array.isArray(column.expr.args.value)
+                            ) {
                                 argsList = column.expr.args.value.map((a: any) => processArg(a, statement)).join(", ");
                             }
-                            
+
                             // Extract the real function name
                             const realFuncName = access.original.split("(")[0];
-                            
+
                             // Reconstruct with array access syntax
                             formattedColumn = `${realFuncName.toUpperCase()}(${argsList})[${access.index}]`;
                             break;
                         }
                     }
-                    
+
                     // If we didn't find a match, fall back to regular formatting
                     if (!formattedColumn) {
                         formattedColumn = formatFunction(column.expr, statement);
@@ -649,31 +656,32 @@ function processArg(arg: any, statement?: any): string {
     // If this is a function, check if it's one of our array access placeholders
     if (arg.type === "function" && statement?.array_accesses && statement.array_accesses.length > 0) {
         // Extract the function name - could be either directly in name or in name.name[0].value
-        const funcName = typeof arg.name === "string" ? arg.name : 
-                        (arg.name?.name?.[0]?.value || "");
-        
+        const funcName = typeof arg.name === "string" ? arg.name : arg.name?.name?.[0]?.value || "";
+
         // Check if this function name contains our placeholder pattern "__ARRAY_ACCESS_"
         if (funcName.includes("__ARRAY_ACCESS_")) {
             // Find the matching array access entry
             for (const access of statement.array_accesses) {
-                if (funcName.includes(access.placeholder.replace(/[()]/g, '')) || 
-                    access.placeholder.includes(funcName.replace(/[()]/g, ''))) {
+                if (
+                    funcName.includes(access.placeholder.replace(/[()]/g, "")) ||
+                    access.placeholder.includes(funcName.replace(/[()]/g, ""))
+                ) {
                     // Format the arguments for the function call
                     let argsList = "";
                     if (arg.args && arg.args.type === "expr_list" && Array.isArray(arg.args.value)) {
                         argsList = arg.args.value.map((a: any) => processArg(a, statement)).join(", ");
                     }
-                    
+
                     // Extract the real function name from the placeholder
                     const realFuncName = access.original.split("(")[0];
-                    
+
                     // Reconstruct the function call with array access syntax
                     return `${realFuncName.toUpperCase()}(${argsList})[${access.index}]`;
                 }
             }
         }
     }
-    
+
     // Handle normal function processing
     if (arg.type === "function") {
         // Handle function with complex name structure
@@ -916,13 +924,17 @@ function formatBinaryExpression(expr: any, statement?: any): string {
     }
 
     const left =
-        expr.left.type === "binary_expr" ? formatBinaryExpression(expr.left, statement) : formatExpressionValue(expr.left, statement);
+        expr.left.type === "binary_expr"
+            ? formatBinaryExpression(expr.left, statement)
+            : formatExpressionValue(expr.left, statement);
 
     const right =
-        expr.right.type === "binary_expr" ? formatBinaryExpression(expr.right, statement) : formatExpressionValue(expr.right, statement);
+        expr.right.type === "binary_expr"
+            ? formatBinaryExpression(expr.right, statement)
+            : formatExpressionValue(expr.right, statement);
 
     const operator = expr.operator;
-    
+
     // Special handling for IS NOT NULL condition
     if (operator === "IS NOT" && (right === "NULL" || (expr.right && expr.right.type === "null"))) {
         return `${left} IS NOT NULL`;
@@ -1124,7 +1136,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         // Parse the statement to uppercase keywords while preserving identifier case
         const statement = ast.statement.replace(
             /\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi,
-            (match) => match.toUpperCase(),
+            (match) => match.toUpperCase()
         );
         parts.push(statement);
         if (!statement.endsWith(";")) {
