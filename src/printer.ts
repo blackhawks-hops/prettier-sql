@@ -392,6 +392,12 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(formatWhere(ast.where, ast));
     }
 
+    // Format GROUP BY clause
+    if (Array.isArray(ast.groupby?.columns)) {
+        parts.push(hardline);
+        parts.push(`GROUP BY ${ast.groupby.columns.map((item: any) => item.value || item.column || "").join(", ")}`);
+    }
+
     // Format ORDER BY clause
     if (ast.orderby && Array.isArray(ast.orderby) && ast.orderby.length > 0) {
         parts.push(hardline);
@@ -1110,7 +1116,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         // Parse the statement to uppercase keywords while preserving identifier case
         const statement = ast.statement.replace(
             /\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi,
-            (match) => match.toUpperCase()
+            (match) => match.toUpperCase(),
         );
         parts.push(statement);
         if (!statement.endsWith(";")) {

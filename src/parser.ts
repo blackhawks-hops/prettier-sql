@@ -83,7 +83,7 @@ export class SQLParser {
         if (createOrReplaceMatch) {
             processedText = processedText.replace(
                 createOrReplaceMatch[0],
-                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `
+                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `,
             );
         }
 
@@ -151,7 +151,7 @@ export class SQLParser {
      */
     static postprocessArrayIndexSyntax(
         ast: any,
-        arrayAccesses: Array<{ original: string; placeholder: string; index: string }>
+        arrayAccesses: Array<{ original: string; placeholder: string; index: string }>,
     ): any {
         if (!ast || arrayAccesses.length === 0) {
             return ast;

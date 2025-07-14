@@ -147,6 +147,7 @@ WHERE status = 'active'
          , COUNT(*) AS order_count
     FROM orders
     WHERE created_at > '2023-01-01'
+    GROUP BY user_id
 )
 SELECT u.id
      , u.name
