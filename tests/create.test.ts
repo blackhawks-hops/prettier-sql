@@ -111,7 +111,7 @@ JOIN recent_orders ro ON u.id = ro.user_id
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Complex view with ctes, ranking, splits", async () => {
+    test("Complex view with ctes, ranking, splits", async () => {
         const unformatted = `CREATE OR REPLACE VIEW eliteprospects.venue AS
 WITH arena_city AS (
     SELECT arena_id

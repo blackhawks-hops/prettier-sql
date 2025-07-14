@@ -412,8 +412,10 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
                     orderStr = formatColumnRef(item.expr);
                 } else if (item.expr.type === "function") {
                     orderStr = formatFunction(item.expr, ast);
+                } else if (item.expr.type === "aggr_func") {
+                    orderStr = formatAggregationFunction(item.expr);
                 } else {
-                    orderStr = item.expr.value || "";
+                    orderStr = formatExpressionValue(item.expr, ast) || item.expr.value || "";
                 }
             }
 
@@ -595,6 +597,10 @@ function formatFunction(func: any, statement?: any): string {
 
                     if (item.expr && item.expr.type === "column_ref") {
                         orderStr = formatColumnRef(item.expr);
+                    } else if (item.expr && item.expr.type === "function") {
+                        orderStr = formatFunction(item.expr, ast);
+                    } else if (item.expr && item.expr.type === "aggr_func") {
+                        orderStr = formatAggregationFunction(item.expr);
                     } else if (item.expr && item.expr.value) {
                         orderStr = item.expr.value;
                     }
@@ -1124,7 +1130,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         // Parse the statement to uppercase keywords while preserving identifier case
         const statement = ast.statement.replace(
             /\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi,
-            (match) => match.toUpperCase()
+            (match) => match.toUpperCase(),
         );
         parts.push(statement);
         if (!statement.endsWith(";")) {
