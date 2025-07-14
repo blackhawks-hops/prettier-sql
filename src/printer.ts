@@ -462,9 +462,6 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
                 // Check if this is an array access function
                 const funcName =
                     typeof column.expr.name === "string" ? column.expr.name : column.expr.name?.name?.[0]?.value || "";
-                console.debug(`Processing function: ${funcName}`);
-                console.debug(`Statement array accesses: ${JSON.stringify(statement?.array_accesses)}`);
-
                 const arrayRegex = /^__ARRAYACCESS__(\d+)__(.+)$/;
                 const match = funcName.match(arrayRegex);
                 if (match) {
@@ -475,7 +472,6 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
                 } else {
                     formattedColumn = formatFunction(column.expr, statement);
                 }
-                console.debug(`Formatted function: ${formattedColumn}`);
             } else if (column.expr.type === "aggr_func") {
                 formattedColumn = formatAggregationFunction(column.expr);
             } else if (column.expr.type === "column_ref") {
