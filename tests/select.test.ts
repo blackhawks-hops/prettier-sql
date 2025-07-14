@@ -318,4 +318,17 @@ WHERE status = 'active'
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Distinct agg", async () => {
+        const unformatted = `select count(distinct email) as unique_emails from users where status = 'active';
+    `;
+
+        const expected = `SELECT COUNT(DISTINCT email) AS unique_emails
+FROM users
+WHERE status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

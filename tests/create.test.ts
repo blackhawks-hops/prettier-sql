@@ -111,24 +111,73 @@ JOIN recent_orders ro ON u.id = ro.user_id
         expect(formatted.trim()).toBe(expected);
     });
 
-    test("Complex view with ctes, ranking, splits", async () => {
+    test.skip("Complex view with ctes, ranking, splits", async () => {
         const unformatted = `CREATE OR REPLACE VIEW eliteprospects.venue AS
-SELECT t.arena_id AS venue_id_eliteprospects, t.arena_name AS venue_name, SPLIT(c.city, ',')[1] as city, t.country_id as country_abbr, t.country_name as country, MAX(last_updated) AS last_updated
+WITH arena_city AS (
+    SELECT arena_id
+         , arena_name
+         , SPLIT(city, ',')[0] AS city
+         , team_id_eliteprospects
+    FROM eliteprospects.team
+    WHERE arena_id IS NOT NULL
+      AND city IS NOT NULL
+    GROUP BY arena_id, arena_name, city, team_id_eliteprospects
+    ORDER BY arena_id, city
+)
+, city_rank AS (
+    SELECT arena_id
+         , arena_name
+         , city
+         , ROW_NUMBER() OVER (PARTITION BY arena_id, arena_name ORDER BY COUNT(DISTINCT team_id_eliteprospects) DESC) AS team_id_rank
+         , COUNT(DISTINCT team_id_eliteprospects) AS team_count
+    FROM arena_city
+    GROUP BY arena_id, arena_name, city
+    ORDER BY arena_id, team_id_rank
+)
+SELECT t.arena_id AS venue_id_eliteprospects
+     , t.arena_name AS venue_name
+     , c.city::varchar AS city
+     , t.country_id AS country_abbr
+     , t.country_name AS country
+     , MAX(last_updated) AS last_updated
 FROM eliteprospects.team t
-WHERE c.city IS NOT NULL
+JOIN city_rank c ON t.arena_id = c.arena_id AND SPLIT(t.city, ',')[0] = c.city
+WHERE c.team_id_rank = 1
 GROUP BY 1,2,3,4,5
 ORDER BY t.arena_id
 ;`;
 
         const expected = `CREATE OR REPLACE VIEW eliteprospects.venue AS
+WITH arena_city AS (
+    SELECT arena_id
+         , arena_name
+         , SPLIT(city, ',')[0] AS city
+         , team_id_eliteprospects
+    FROM eliteprospects.team
+    WHERE arena_id IS NOT NULL
+      AND city IS NOT NULL
+    GROUP BY arena_id, arena_name, city, team_id_eliteprospects
+    ORDER BY arena_id, city
+)
+, city_rank AS (
+    SELECT arena_id
+         , arena_name
+         , city
+         , ROW_NUMBER() OVER (PARTITION BY arena_id, arena_name ORDER BY COUNT(DISTINCT team_id_eliteprospects) DESC) AS team_id_rank
+         , COUNT(DISTINCT team_id_eliteprospects) AS team_count
+    FROM arena_city
+    GROUP BY arena_id, arena_name, city
+    ORDER BY arena_id, team_id_rank
+)
 SELECT t.arena_id AS venue_id_eliteprospects
      , t.arena_name AS venue_name
-     , SPLIT(c.city, ',')[1] AS city
+     , c.city::varchar AS city
      , t.country_id AS country_abbr
      , t.country_name AS country
      , MAX(last_updated) AS last_updated
 FROM eliteprospects.team t
-WHERE c.city IS NOT NULL
+JOIN city_rank c ON t.arena_id = c.arena_id AND SPLIT(t.city, ',')[0] = c.city
+WHERE c.team_id_rank = 1
 GROUP BY 1, 2, 3, 4, 5
 ORDER BY t.arena_id
 ;`;

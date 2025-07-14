@@ -686,7 +686,7 @@ function processArg(arg: any, statement?: any): string {
     } else if (arg.type === "single_quote_string") {
         return `'${arg.value}'`;
     }
-    return arg.value || "";
+    return arg.distinct ? `DISTINCT ${arg.value || ""}` : arg.value || "";
 }
 
 /**
@@ -704,7 +704,7 @@ function formatAggregationFunction(func: any): string {
         return `${funcName}(${args.join(", ")})`;
     } else if (func.args?.expr) {
         const arg = processArg(func.args?.expr);
-        return `${funcName}(${arg})`;
+        return `${funcName}(${func.args.distinct ? "DISTINCT " : ""}${arg})`;
     }
 
     return `${funcName}()`;
@@ -1116,7 +1116,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         // Parse the statement to uppercase keywords while preserving identifier case
         const statement = ast.statement.replace(
             /\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi,
-            (match) => match.toUpperCase(),
+            (match) => match.toUpperCase()
         );
         parts.push(statement);
         if (!statement.endsWith(";")) {
