@@ -982,6 +982,14 @@ function formatExpressionValue(expr: any, statement?: any): string {
             const funcName = expr.name.name[0].value.toUpperCase();
             if (["CURRENT_DATE", "CURRENT_TIMESTAMP"].includes(funcName)) {
                 return funcName;
+            } else if (funcName.includes("__ARRAYACCESS__")) {
+                // Handle array access functions
+                const arrayAccessMatch = funcName.match(/__ARRAYACCESS__(\d+)__(.+)/);
+                if (arrayAccessMatch) {
+                    const index = arrayAccessMatch[1];
+                    const originalFuncName = arrayAccessMatch[2].toUpperCase();
+                    return `${originalFuncName}(${expr.args?.value.map((arg: any) => processArg(arg, statement)).join(", ")})[${index}]`;
+                }
             }
         }
         return processArg(expr, statement); // Use processArg to handle all function cases

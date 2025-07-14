@@ -331,4 +331,22 @@ WHERE status = 'active'
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Join with split", async () => {
+        const unformatted = `
+      select u.id, u.name, o.order_id
+      from users u
+      join orders o on u.name_last = split(o.name, ',')[0]
+    `;
+
+        const expected = `SELECT u.id
+     , u.name
+     , o.order_id
+FROM users u
+JOIN orders o ON u.name_last = SPLIT(o.name, ',')[0]
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
