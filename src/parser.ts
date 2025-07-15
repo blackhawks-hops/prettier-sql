@@ -70,6 +70,41 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for ARRAY and OBJECT column types
+     * Returns an object with the processed text and the custom types for post-processing
+     */
+    static preprocessCustomTypes(sql: string): {
+        processedText: string;
+        customTypes: Array<{ original: string; placeholder: string; type: string }>;
+    } {
+        let processedText = sql;
+        const customTypes: Array<{ original: string; placeholder: string; type: string }> = [];
+
+        // Define patterns for recognizing ARRAY and OBJECT types in column definitions
+        // Looking for patterns like:  columnName ARRAY, or columnName OBJECT
+        const customTypeRegex = /\b(\w+)\s+(ARRAY|OBJECT)\b/gi;
+        let match;
+
+        while ((match = customTypeRegex.exec(sql)) !== null) {
+            const original = match[0]; // e.g., "data OBJECT" or "tags ARRAY"
+            const columnName = match[1]; // e.g., "data" or "tags"
+            const typeName = match[2].toUpperCase(); // "ARRAY" or "OBJECT"
+
+            // Create a placeholder using VARCHAR as a temporary type
+            // node-sql-parser supports VARCHAR, so we'll use it as our placeholder
+            const placeholder = `${columnName} VARCHAR`;
+
+            // Replace the original text with our placeholder
+            processedText = processedText.replace(original, placeholder);
+
+            // Store the mapping for post-processing
+            customTypes.push({ original, placeholder, type: typeName });
+        }
+
+        return { processedText, customTypes };
+    }
+
+    /**
      * Preprocess SQL for "CREATE OR REPLACE TABLE/VIEW" Snowflake dialect
      * Returns an object with the processed text and the match result for post-processing
      */
@@ -171,6 +206,56 @@ export class SQLParser {
     }
 
     /**
+     * Apply post-processing for custom types (ARRAY, OBJECT)
+     */
+    static postprocessCustomTypes(
+        ast: any,
+        customTypes: Array<{ original: string; placeholder: string; type: string }>,
+    ): any {
+        if (!ast || customTypes.length === 0) {
+            return ast;
+        }
+
+        // Process the AST to restore custom types
+        if (!Array.isArray(ast)) {
+            ast = [ast];
+        }
+
+        ast.forEach((statement: any) => {
+            // Handle CREATE TABLE statements
+            if (statement.type === "create" && statement.keyword === "table") {
+                if (statement.create_definitions && Array.isArray(statement.create_definitions)) {
+                    // Process each column definition
+                    for (const column of statement.create_definitions) {
+                        if (column.definition && column.definition.dataType) {
+                            // Check if this column was using a custom type
+                            for (const customType of customTypes) {
+                                // Extract column name from the placeholder (which is "columnName VARCHAR")
+                                const placeholderParts = customType.placeholder.split(" ");
+                                const columnName = placeholderParts[0];
+
+                                // Check if this is the column we need to restore
+                                if (column.column?.column === columnName) {
+                                    // Restore the original type
+                                    column.definition.dataType = customType.type;
+
+                                    // Clear any length property since ARRAY and OBJECT don't have lengths
+                                    delete column.definition.length;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Store custom_types in the statement for the printer to use
+            statement.custom_types = customTypes;
+        });
+
+        return Array.isArray(ast) && ast.length === 1 ? ast[0] : ast;
+    }
+
+    /**
      * Parse SQL code into an AST
      */
     static parse(text: string): SQLNode {
@@ -211,9 +296,12 @@ export class SQLParser {
                         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
                             this.preprocessCreateOrReplace(sqlOnly);
 
+                        // Preprocess SQL for custom types (ARRAY and OBJECT)
+                        const { processedText: textAfterCustomTypes, customTypes } =
+                            this.preprocessCustomTypes(textAfterCreateOrReplace);
+
                         // Preprocess array index syntax
-                        const { processedText, arrayAccesses } =
-                            this.preprocessArrayIndexSyntax(textAfterCreateOrReplace);
+                        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCustomTypes);
 
                         // Parse the processed text
                         const stmtAst = this.parser.astify(processedText);
@@ -223,6 +311,9 @@ export class SQLParser {
 
                         // Apply post-processing for array index syntax
                         processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);
+
+                        // Apply post-processing for custom types
+                        processedAst = this.postprocessCustomTypes(processedAst, customTypes);
 
                         // stmtAst could be an array (although unlikely for a single statement)
                         if (Array.isArray(processedAst)) {
@@ -265,8 +356,12 @@ export class SQLParser {
         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
             this.preprocessCreateOrReplace(cleanText);
 
+        // Preprocess SQL for custom types (ARRAY and OBJECT)
+        const { processedText: textAfterCustomTypes, customTypes } =
+            this.preprocessCustomTypes(textAfterCreateOrReplace);
+
         // Preprocess array index syntax
-        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCreateOrReplace);
+        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCustomTypes);
 
         try {
             // Parse the processed text
@@ -277,6 +372,9 @@ export class SQLParser {
 
             // Post-processing for array index syntax
             processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);
+
+            // Post-processing for custom types
+            processedAst = this.postprocessCustomTypes(processedAst, customTypes);
 
             return {
                 type: "sql",

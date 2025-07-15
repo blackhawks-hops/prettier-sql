@@ -185,4 +185,17 @@ ORDER BY t.arena_id
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("OBJECT and ARRAY types", async () => {
+        const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, data OBJECT, tags ARRAY);`;
+        const expected = `CREATE TABLE my_table (
+      id INT PRIMARY KEY
+    , data OBJECT
+    , tags ARRAY
+)
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
