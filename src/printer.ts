@@ -1,6 +1,6 @@
 import { doc } from "prettier";
 import { SQLNode } from "./types";
-import { AST, Select, Create, Update } from "node-sql-parser";
+import { AST, Select, Create, Update, TableExpr } from "node-sql-parser";
 
 // Define our custom AST types
 interface GrantAst {
@@ -384,19 +384,19 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(" ");
 
         // Check if we have a subquery in the FROM clause
-        if (ast.from[0]?.expr) {
+        if ((ast.from[0] as TableExpr)?.expr) {
             // Handle subquery in FROM
             parts.push("(");
-            if (ast.from[0].expr.ast && ast.from[0].expr.ast.type === "select") {
-                parts.push(indent(formatSelect(ast.from[0].expr.ast, false)));
+            if ((ast.from[0] as TableExpr).expr.ast && (ast.from[0] as TableExpr).expr.ast.type === "select") {
+                parts.push(indent(formatSelect((ast.from[0] as TableExpr).expr.ast, false)));
                 parts.push(hardline);
             }
             parts.push(")");
 
             // Add alias if it exists
-            if (ast.from[0].as) {
+            if ((ast.from[0] as TableExpr).as) {
                 parts.push(" ");
-                parts.push(ast.from[0].as);
+                parts.push((ast.from[0] as TableExpr).as);
             }
         } else {
             parts.push(formatFrom(ast.from));
