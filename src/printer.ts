@@ -221,15 +221,18 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                             } else {
                                 columnDefs.push(funcName);
                             }
+                        } else if (def.default_val.value && def.default_val.value.type === "bool") {
+                            // Handle boolean values
+                            columnDefs.push(def.default_val.value.value === true ? "TRUE" : "FALSE");
                         } else if (def.default_val.value && typeof def.default_val.value === "string") {
                             // For string literals
                             columnDefs.push(`'${def.default_val.value}'`);
                         } else if (def.default_val.value && def.default_val.value.value) {
                             // For structured values
-                            columnDefs.push(def.default_val.value.value);
+                            columnDefs.push(String(def.default_val.value.value));
                         } else {
                             // Fallback
-                            columnDefs.push(def.default_val.value);
+                            columnDefs.push(String(def.default_val.value || ""));
                         }
                     }
 
@@ -248,8 +251,14 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                             } else {
                                 columnDefs.push(`${funcName}()`);
                             }
+                        } else if (
+                            def.definition.default_val.value &&
+                            def.definition.default_val.value.type === "bool"
+                        ) {
+                            // Handle boolean values
+                            columnDefs.push(def.definition.default_val.value.value === true ? "TRUE" : "FALSE");
                         } else {
-                            columnDefs.push(def.definition.default_val.value || "");
+                            columnDefs.push(String(def.definition.default_val.value || ""));
                         }
                     }
 

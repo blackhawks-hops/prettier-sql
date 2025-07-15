@@ -198,4 +198,17 @@ ORDER BY t.arena_id
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Default booleans", async () => {
+        const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, is_active BOOLEAN DEFAULT TRUE, is_verified BOOLEAN DEFAULT FALSE);`;
+        const expected = `CREATE TABLE my_table (
+      id INT PRIMARY KEY
+    , is_active BOOLEAN DEFAULT TRUE
+    , is_verified BOOLEAN DEFAULT FALSE
+)
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
