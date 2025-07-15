@@ -382,7 +382,25 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(hardline);
         parts.push("FROM");
         parts.push(" ");
-        parts.push(formatFrom(ast.from));
+
+        // Check if we have a subquery in the FROM clause
+        if (ast.from[0]?.expr) {
+            // Handle subquery in FROM
+            parts.push("(");
+            if (ast.from[0].expr.ast && ast.from[0].expr.ast.type === "select") {
+                parts.push(indent(formatSelect(ast.from[0].expr.ast, false)));
+                parts.push(hardline);
+            }
+            parts.push(")");
+
+            // Add alias if it exists
+            if (ast.from[0].as) {
+                parts.push(" ");
+                parts.push(ast.from[0].as);
+            }
+        } else {
+            parts.push(formatFrom(ast.from));
+        }
     }
 
     // Process JOIN conditions - joins are part of the from array in node-sql-parser

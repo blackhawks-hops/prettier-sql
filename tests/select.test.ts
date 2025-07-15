@@ -349,4 +349,41 @@ JOIN orders o ON u.name_last = SPLIT(o.name, ',')[0]
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Subquery in a CTE", async () => {
+        const unformatted = `CREATE OR REPLACE VIEW madhouse.list AS
+WITH latest_version AS (
+    SELECT list_id, list_version_id FROM (
+        SELECT list_id
+             , list_version_id
+             , ROW_NUMBER() OVER (PARTITION BY list_id ORDER BY last_updated DESC) AS version_number
+        FROM madhouse.list_history
+    )
+    WHERE version_number = 1
+)
+SELECT lh.*
+FROM madhouse.list_history lh
+JOIN latest_version lv USING(list_id, list_version_id)
+;`;
+
+        const expected = `CREATE OR REPLACE VIEW madhouse.list AS
+WITH latest_version AS (
+    SELECT list_id
+         , list_version_id
+    FROM (
+        SELECT list_id
+             , list_version_id
+             , ROW_NUMBER() OVER (PARTITION BY list_id ORDER BY last_updated DESC) AS version_number
+        FROM madhouse.list_history
+    )
+    WHERE version_number = 1
+)
+SELECT lh.*
+FROM madhouse.list_history lh
+JOIN latest_version lv USING(list_id, list_version_id)
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
