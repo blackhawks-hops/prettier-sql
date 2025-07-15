@@ -195,7 +195,7 @@ WHERE status = 'completed'
      , u.name
      , o.total
 FROM users u
-JOIN orders o USING (user_id)
+JOIN orders o USING(user_id)
 WHERE u.status = 'active'
 ;`;
 
@@ -269,7 +269,7 @@ JOIN (
     SELECT id
          , name
     FROM orders
-) o USING (id)
+) o USING(id)
 WHERE status = 'active'
 ;`;
 

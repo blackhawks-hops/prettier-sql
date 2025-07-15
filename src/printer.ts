@@ -816,7 +816,7 @@ function formatJoin(joinDefinition: any): doc.builders.DocCommand {
     }
     // Format USING clause
     else if (joinItem.using) {
-        parts.push(" USING (");
+        parts.push(" USING(");
 
         if (Array.isArray(joinItem.using)) {
             // Join multiple columns with commas

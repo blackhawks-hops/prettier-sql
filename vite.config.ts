@@ -11,7 +11,7 @@ export default defineConfig({
             formats: ["cjs", "es"],
         },
         rollupOptions: {
-            external: ["prettier/parser-babel", "prettier/parser-typescript", "prettier"],
+            external: ["prettier"],
             output: {
                 preserveModules: true,
                 exports: "named",
