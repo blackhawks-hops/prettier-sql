@@ -199,6 +199,20 @@ ORDER BY t.arena_id
         expect(formatted.trim()).toBe(expected);
     });
 
+    test.skip("More custom types", async () => {
+        const unformatted = `CREATE TABLE my_table (id REAL, metadata JSON, settings STRING, another_one VARIANT);`;
+        const expected = `CREATE TABLE my_table (
+      id REAL
+    , metadata JSON
+    , settings STRING
+    , another_one VARIANT
+)
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
     test("Default booleans", async () => {
         const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, is_active BOOLEAN DEFAULT TRUE, is_verified BOOLEAN DEFAULT FALSE);`;
         const expected = `CREATE TABLE my_table (
@@ -206,6 +220,31 @@ ORDER BY t.arena_id
     , is_active BOOLEAN DEFAULT TRUE
     , is_verified BOOLEAN DEFAULT FALSE
 )
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test.skip("Inline comments", async () => {
+        const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100) -- full name);`;
+        const expected = `CREATE TABLE my_table (
+      id INT PRIMARY KEY
+    , name VARCHAR(100) -- full name
+)
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test.skip("Comment on table", async () => {
+        const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100)) COMMENT 'This is a sample table';`;
+        const expected = `CREATE TABLE my_table (
+      id INT PRIMARY KEY
+    , name VARCHAR(100)
+)
+COMMENT 'This is a sample table'
 ;`;
 
         const formatted = await prettier.format(unformatted, options);

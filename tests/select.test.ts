@@ -386,4 +386,65 @@ JOIN latest_version lv USING(list_id, list_version_id)
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test.skip("Boolean gates in WHERE clause", async () => {
+        const unformatted = `
+      SELECT id, name, email
+      FROM users
+      WHERE status = 'active' AND (is_verified = true OR is_premium = true);
+    `;
+
+        const expected = `SELECT id
+     , name
+     , email
+FROM users
+WHERE status = 'active'
+  AND (is_verified = true OR is_premium = true)
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test.skip("Block multiline comments", async () => {
+        const unformatted = `
+      SELECT id, name, email
+      FROM users
+      /* This is a comment
+         that spans multiple lines */
+      WHERE status = 'active';
+    `;
+
+        const expected = `SELECT id
+     , name
+     , email
+FROM users
+/* This is a comment
+   that spans multiple lines */
+WHERE status = 'active'
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test.skip("Unions", async () => {
+        const unformatted = `
+      SELECT id, name FROM users WHERE status = 'active'
+      UNION
+      SELECT id, name FROM customers WHERE status = 'active';
+    `;
+
+        const expected = `SELECT id
+     , name
+FROM users
+WHERE status = 'active'
+UNION
+SELECT id
+     , name
+FROM customers
+WHERE status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    })
 });
