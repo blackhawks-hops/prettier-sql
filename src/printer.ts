@@ -1,6 +1,6 @@
 import { doc } from "prettier";
 import { SQLNode } from "./types";
-import { AST, Select, Create, Update, TableExpr } from "node-sql-parser";
+import { AST, Select, Create, Update, Delete, TableExpr } from "node-sql-parser";
 
 // Define our custom AST types
 interface GrantAst {
@@ -91,6 +91,8 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
             return formatCreate(ast as Create);
         case "update":
             return formatUpdate(ast as Update, includeSemicolon);
+        case "delete":
+            return formatDelete(ast as Delete, includeSemicolon);
         case "grant":
             return formatGrant(ast as GrantAst);
         case "comment":
@@ -1144,6 +1146,48 @@ function shouldAddBlankLine(prevStmt: any, currStmt: any): boolean {
 
     // By default, add a blank line between different statement types
     return prevStmt.type !== currStmt.type;
+}
+
+/**
+ * Format a DELETE statement
+ */
+function formatDelete(ast: Delete, includeSemicolon: boolean = true): doc.builders.DocCommand {
+    const parts: doc.builders.DocCommand[] = [];
+    
+    // DELETE keyword
+    parts.push("DELETE FROM");
+
+    // Table name
+    if (ast.table && ast.table.length > 0) {
+        parts.push(" ");
+        // Use type assertion for the table properties
+        const tableName = ast.table[0] as any;
+        if (tableName.db) {
+            parts.push(`${tableName.db}.${tableName.table}`);
+        } else {
+            parts.push(tableName.table);
+        }
+        // Add alias if provided
+        if (tableName.as) {
+            parts.push(" ");
+            parts.push(tableName.as);
+        }
+    }
+
+    // WHERE clause
+    if (ast.where) {
+        parts.push(hardline);
+        parts.push("WHERE");
+        parts.push(formatWhere(ast.where));
+    }
+
+    // Semicolon
+    if (includeSemicolon) {
+        parts.push(hardline);
+        parts.push(";");
+    }
+
+    return join("", parts);
 }
 
 /**

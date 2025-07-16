@@ -10,7 +10,7 @@ const options = {
 };
 
 describe("DELETE", () => {
-    test.skip("Simple delete", async () => {
+    test("Simple delete", async () => {
         const unformatted = `delete from public.user where id = 1;`;
 
         const expected = `DELETE FROM public.user
