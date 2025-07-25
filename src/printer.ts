@@ -1149,6 +1149,65 @@ function shouldAddBlankLine(prevStmt: any, currStmt: any): boolean {
 }
 
 /**
+ * Format CTE content within a USING clause
+ */
+function formatCTEInUsing(innerSql: string): doc.builders.DocCommand {
+    // Basic formatting for CTE in USING clause
+    const parts: doc.builders.DocCommand[] = [];
+    
+    // Look for WITH clause pattern
+    const withMatch = innerSql.match(/^(with\s+\w+\s+as\s*\([^)]+\))\s+(.+)$/i);
+    if (withMatch) {
+        const [, withClause, selectClause] = withMatch;
+        
+        // Format the WITH clause with proper indentation
+        parts.push("WITH ");
+        const cteMatch = withClause.match(/with\s+(\w+)\s+as\s*\(([^)]+)\)/i);
+        if (cteMatch) {
+            const [, cteName, cteQuery] = cteMatch;
+            parts.push(cteName);
+            parts.push(" AS (");
+            parts.push(hardline);
+            
+            // Format the inner query with proper case and structure
+            const innerQuery = cteQuery.trim();
+            // Parse the inner query to format it properly
+            const selectMatch = innerQuery.match(/^select\s+(.+?)\s+from\s+(.+)$/i);
+            if (selectMatch) {
+                const [, selectList, fromClause] = selectMatch;
+                parts.push(indent([
+                    "SELECT " + selectList.trim(),
+                    hardline,
+                    "FROM " + fromClause.trim()
+                ]));
+            } else {
+                parts.push(indent([innerQuery.toUpperCase()]));
+            }
+            
+            parts.push(hardline);
+            parts.push(")");
+        }
+        
+        parts.push(hardline);
+        // Format the outer SELECT with proper indentation
+        const outerSelectMatch = selectClause.trim().match(/^select\s+(.+?)\s+from\s+(.+)$/i);
+        if (outerSelectMatch) {
+            const [, selectList, fromClause] = outerSelectMatch;
+            parts.push("SELECT " + selectList.trim());
+            parts.push(hardline);
+            parts.push("FROM " + fromClause.trim());
+        } else {
+            parts.push(selectClause.trim().toUpperCase());
+        }
+    } else {
+        // Fallback for other patterns
+        parts.push(innerSql.trim().replace(/\s+/g, ' ').toUpperCase());
+    }
+    
+    return join("", parts);
+}
+
+/**
  * Format a DELETE statement
  */
 function formatDelete(ast: Delete, includeSemicolon: boolean = true): doc.builders.DocCommand {
@@ -1171,6 +1230,53 @@ function formatDelete(ast: Delete, includeSemicolon: boolean = true): doc.builde
         if (tableName.as) {
             parts.push(" ");
             parts.push(tableName.as);
+        }
+    }
+
+    // USING clause
+    if ((ast as any).using) {
+        parts.push(hardline);
+        parts.push("USING ");
+        const usingClause = (ast as any).using;
+        
+        // Check if the USING clause has an alias at the end
+        const aliasMatch = usingClause.match(/^(.+?)\s+AS\s+(\w+)$/i);
+        let mainClause = usingClause;
+        let alias = null;
+        
+        if (aliasMatch) {
+            mainClause = aliasMatch[1].trim();
+            alias = aliasMatch[2];
+        }
+        
+        // Check if the main clause is a subquery (starts with parentheses)
+        if (mainClause.startsWith('(') && mainClause.endsWith(')')) {
+            const innerSql = mainClause.slice(1, -1).trim();
+            
+            // Check if it contains WITH (CTE) - format it specially
+            if (innerSql.toLowerCase().includes('with ')) {
+                parts.push("(");
+                parts.push(hardline);
+                parts.push(indent([
+                    formatCTEInUsing(innerSql)
+                ]));
+                parts.push(hardline);
+                parts.push(")");
+            } else {
+                parts.push("(");
+                parts.push(hardline);
+                parts.push(indent([innerSql]));
+                parts.push(hardline);
+                parts.push(")");
+            }
+        } else {
+            parts.push(mainClause);
+        }
+        
+        // Add alias if present
+        if (alias) {
+            parts.push(" AS ");
+            parts.push(alias);
         }
     }
 

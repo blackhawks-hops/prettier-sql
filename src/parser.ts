@@ -126,6 +126,33 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for DELETE with USING clause
+     * Returns an object with the processed text and the using clause for post-processing
+     */
+    static preprocessDeleteUsing(sql: string): {
+        processedText: string;
+        usingClause: string | null;
+    } {
+        let processedText = sql;
+        let usingClause = null;
+
+        // Check if this is a DELETE statement with USING clause
+        // More flexible regex to handle complex USING clauses including CTEs with aliases
+        const deleteUsingRegex = /^(DELETE\s+FROM\s+\S+)\s+USING\s+(.+?)\s+WHERE\s+(.+)$/i;
+        const match = sql.match(deleteUsingRegex);
+
+        if (match) {
+            const [, deleteFrom, using, whereCondition] = match;
+            usingClause = using.trim();
+            
+            // Remove the USING clause from the SQL to make it parseable by node-sql-parser
+            processedText = `${deleteFrom} WHERE ${whereCondition}`;
+        }
+
+        return { processedText, usingClause };
+    }
+
+    /**
      * Preprocess SQL for array index syntax like SPLIT(x)[0]
      * Returns an object with the processed text and the array accesses for post-processing
      */
@@ -176,6 +203,30 @@ export class SQLParser {
             (ast.keyword === "table" || ast.keyword === "view")
         ) {
             ast.ignore_replace = "replace";
+        }
+
+        return ast;
+    }
+
+    /**
+     * Apply post-processing for DELETE with USING clause
+     */
+    static postprocessDeleteUsing(ast: any, usingClause: string | null): any {
+        if (!ast || !usingClause) {
+            return ast;
+        }
+
+        // Handle both single statement and array of statements
+        const processStatement = (stmt: any) => {
+            if (stmt.type === "delete") {
+                stmt.using = usingClause;
+            }
+        };
+
+        if (Array.isArray(ast)) {
+            ast.forEach(processStatement);
+        } else {
+            processStatement(ast);
         }
 
         return ast;
@@ -296,9 +347,13 @@ export class SQLParser {
                         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
                             this.preprocessCreateOrReplace(sqlOnly);
 
+                        // Preprocess DELETE with USING clause
+                        const { processedText: textAfterDeleteUsing, usingClause } =
+                            this.preprocessDeleteUsing(textAfterCreateOrReplace);
+
                         // Preprocess SQL for custom types (ARRAY and OBJECT)
                         const { processedText: textAfterCustomTypes, customTypes } =
-                            this.preprocessCustomTypes(textAfterCreateOrReplace);
+                            this.preprocessCustomTypes(textAfterDeleteUsing);
 
                         // Preprocess array index syntax
                         const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCustomTypes);
@@ -308,6 +363,9 @@ export class SQLParser {
 
                         // Apply post-processing for CREATE OR REPLACE
                         let processedAst = this.postprocessCreateOrReplace(stmtAst, createOrReplaceMatch);
+
+                        // Apply post-processing for DELETE with USING
+                        processedAst = this.postprocessDeleteUsing(processedAst, usingClause);
 
                         // Apply post-processing for array index syntax
                         processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);
@@ -356,9 +414,13 @@ export class SQLParser {
         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
             this.preprocessCreateOrReplace(cleanText);
 
+        // Preprocess DELETE with USING clause
+        const { processedText: textAfterDeleteUsing, usingClause } =
+            this.preprocessDeleteUsing(textAfterCreateOrReplace);
+
         // Preprocess SQL for custom types (ARRAY and OBJECT)
         const { processedText: textAfterCustomTypes, customTypes } =
-            this.preprocessCustomTypes(textAfterCreateOrReplace);
+            this.preprocessCustomTypes(textAfterDeleteUsing);
 
         // Preprocess array index syntax
         const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCustomTypes);
@@ -369,6 +431,9 @@ export class SQLParser {
 
             // Post-processing for CREATE OR REPLACE
             let processedAst = this.postprocessCreateOrReplace(ast, createOrReplaceMatch);
+
+            // Post-processing for DELETE with USING
+            processedAst = this.postprocessDeleteUsing(processedAst, usingClause);
 
             // Post-processing for array index syntax
             processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);

@@ -34,7 +34,7 @@ WHERE id IN (
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Delete with a CTE", async () => {
+    test("Delete with a CTE", async () => {
         const unformatted = `delete from public.user using (with temp_users as (select id from users) select id from temp_users) as tu where public.user.id = tu.id;`;
         const expected = `DELETE FROM public.user
 USING (
