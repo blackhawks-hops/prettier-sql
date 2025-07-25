@@ -217,7 +217,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
 
             // Filter out non-column definitions (like table constraints)
             const columnDefinitions = ast.create_definitions.filter(
-                (def: any) => def.column && def.column.column && def.definition
+                (def: any) => def.column && def.column.column && def.definition,
             );
 
             // First pass: find maximum column name length for alignment (using lowercase)
@@ -1541,7 +1541,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         // Parse the statement to uppercase keywords while preserving identifier case
         const statement = ast.statement.replace(
             /\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi,
-            (match) => match.toUpperCase()
+            (match) => match.toUpperCase(),
         );
         parts.push(statement);
         if (!statement.endsWith(";")) {
