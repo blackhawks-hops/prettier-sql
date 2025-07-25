@@ -199,7 +199,7 @@ ORDER BY t.arena_id
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("More custom types", async () => {
+    test("More custom types", async () => {
         const unformatted = `CREATE TABLE my_table (id REAL, metadata JSON, settings STRING, another_one VARIANT);`;
         const expected = `CREATE TABLE my_table (
       id REAL
@@ -226,7 +226,7 @@ ORDER BY t.arena_id
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Inline comments", async () => {
+    test("Inline comments", async () => {
         const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100) -- full name);`;
         const expected = `CREATE TABLE my_table (
       id INT PRIMARY KEY
@@ -238,7 +238,7 @@ ORDER BY t.arena_id
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Comment on table", async () => {
+    test("Comment on table", async () => {
         const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100)) COMMENT 'This is a sample table';`;
         const expected = `CREATE TABLE my_table (
       id INT PRIMARY KEY

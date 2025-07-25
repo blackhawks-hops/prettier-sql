@@ -113,6 +113,28 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
 }
 
 /**
+ * Helper function to restore inline comments from placeholders
+ */
+function restoreInlineComments(text: string, statement: any): string {
+    if (!statement.inline_comments || statement.inline_comments.length === 0) {
+        return text;
+    }
+
+    let result = text;
+    statement.inline_comments.forEach((commentInfo: any) => {
+        // Check if the current text matches the part before the placeholder
+        // e.g., if placeholder was "VARCHAR(100) /* INLINE_COMMENT_PLACEHOLDER_0 */"
+        // and text is "VARCHAR(100)", then we should add the comment
+        const beforePlaceholder = commentInfo.placeholder.replace(/ \/\* INLINE_COMMENT_PLACEHOLDER_\d+ \*\//, "");
+        if (text === beforePlaceholder) {
+            result = text + " " + commentInfo.comment;
+        }
+    });
+
+    return result;
+}
+
+/**
  * Format a CREATE statement
  */
 function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
@@ -172,17 +194,23 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                 // Data type
                 if (def.definition) {
                     columnDefs.push(" ");
-                    columnDefs.push(def.definition.dataType);
+
+                    // Build complete data type string first
+                    let completeDataType = def.definition.dataType;
 
                     // Handle length/precision
                     if (def.definition.length && def.definition.parentheses) {
                         if (def.definition.scale !== undefined) {
                             // For types like DECIMAL that have precision and scale
-                            columnDefs.push(`(${def.definition.length},${def.definition.scale})`);
+                            completeDataType += `(${def.definition.length},${def.definition.scale})`;
                         } else {
-                            columnDefs.push(`(${def.definition.length})`);
+                            completeDataType += `(${def.definition.length})`;
                         }
                     }
+
+                    // Now restore inline comments for the complete data type
+                    const dataTypeWithComments = restoreInlineComments(completeDataType, ast);
+                    columnDefs.push(dataTypeWithComments);
 
                     // Handle primary key constraint
                     if (def.primary_key) {
@@ -312,6 +340,18 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             parts.push(indent(join("", columnDefs)));
             parts.push(hardline);
             parts.push(")");
+        }
+
+        // Handle table options (e.g., COMMENT)
+        if (ast.table_options && Array.isArray(ast.table_options)) {
+            ast.table_options.forEach((option: any) => {
+                if (option.keyword === "comment") {
+                    parts.push(hardline);
+                    parts.push("COMMENT ");
+                    // The value already includes quotes, so use it directly
+                    parts.push(option.value);
+                }
+            });
         }
     }
     // Handle view creation

@@ -70,7 +70,7 @@ export class SQLParser {
     }
 
     /**
-     * Preprocess SQL for ARRAY and OBJECT column types
+     * Preprocess SQL for custom column types
      * Returns an object with the processed text and the custom types for post-processing
      */
     static preprocessCustomTypes(sql: string): {
@@ -80,19 +80,25 @@ export class SQLParser {
         let processedText = sql;
         const customTypes: Array<{ original: string; placeholder: string; type: string }> = [];
 
-        // Define patterns for recognizing ARRAY and OBJECT types in column definitions
-        // Looking for patterns like:  columnName ARRAY, or columnName OBJECT
-        const customTypeRegex = /\b(\w+)\s+(ARRAY|OBJECT)\b/gi;
+        // Define patterns for recognizing custom types in column definitions
+        // Looking for patterns like: columnName ARRAY, columnName OBJECT, columnName REAL, etc.
+        // Note: JSON is already supported by node-sql-parser, so we don't need to handle it here
+        const customTypeRegex = /\b(\w+)\s+(ARRAY|OBJECT|REAL|STRING|VARIANT)\b/gi;
         let match;
 
         while ((match = customTypeRegex.exec(sql)) !== null) {
-            const original = match[0]; // e.g., "data OBJECT" or "tags ARRAY"
-            const columnName = match[1]; // e.g., "data" or "tags"
-            const typeName = match[2].toUpperCase(); // "ARRAY" or "OBJECT"
+            const original = match[0]; // e.g., "data OBJECT" or "tags ARRAY" or "id REAL"
+            const columnName = match[1]; // e.g., "data" or "tags" or "id"
+            const typeName = match[2].toUpperCase(); // "ARRAY", "OBJECT", "REAL", etc.
 
-            // Create a placeholder using VARCHAR as a temporary type
-            // node-sql-parser supports VARCHAR, so we'll use it as our placeholder
-            const placeholder = `${columnName} VARCHAR`;
+            // Create a placeholder using a supported type as a temporary type
+            // node-sql-parser supports these types, so we'll use them as placeholders
+            let placeholderType = "VARCHAR";
+            if (typeName === "REAL") {
+                placeholderType = "FLOAT"; // REAL is similar to FLOAT
+            }
+
+            const placeholder = `${columnName} ${placeholderType}`;
 
             // Replace the original text with our placeholder
             processedText = processedText.replace(original, placeholder);
@@ -102,6 +108,40 @@ export class SQLParser {
         }
 
         return { processedText, customTypes };
+    }
+
+    /**
+     * Preprocess SQL for inline comments
+     * Returns an object with the processed text and the inline comments for post-processing
+     */
+    static preprocessInlineComments(sql: string): {
+        processedText: string;
+        inlineComments: Array<{ original: string; placeholder: string; comment: string }>;
+    } {
+        let processedText = sql;
+        const inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
+
+        // Find inline comments (-- comment) but not at the start of a line
+        // Match: word/identifier followed by whitespace and then -- comment (but stop before ; or ))
+        const inlineCommentRegex = /(\w+(?:\([^)]*\))?)\s+(--\s*[^;\r\n)]*)/g;
+        let match;
+
+        while ((match = inlineCommentRegex.exec(sql)) !== null) {
+            const beforeComment = match[1];
+            const comment = match[2];
+            const original = match[0];
+
+            // Create a placeholder to mark where the comment was
+            const placeholder = `${beforeComment} /* INLINE_COMMENT_PLACEHOLDER_${inlineComments.length} */`;
+
+            // Replace the original text with our placeholder
+            processedText = processedText.replace(original, placeholder);
+
+            // Store the mapping for post-processing
+            inlineComments.push({ original, placeholder, comment });
+        }
+
+        return { processedText, inlineComments };
     }
 
     /**
@@ -257,6 +297,30 @@ export class SQLParser {
     }
 
     /**
+     * Apply post-processing for inline comments
+     */
+    static postprocessInlineComments(
+        ast: any,
+        inlineComments: Array<{ original: string; placeholder: string; comment: string }>,
+    ): any {
+        if (!ast || inlineComments.length === 0) {
+            return ast;
+        }
+
+        // Store inline comment information in the AST for the printer to use
+        if (!Array.isArray(ast)) {
+            ast = [ast];
+        }
+
+        ast.forEach((statement: any) => {
+            // Add inline_comments property to the root of each statement
+            statement.inline_comments = inlineComments;
+        });
+
+        return Array.isArray(ast) && ast.length === 1 ? ast[0] : ast;
+    }
+
+    /**
      * Apply post-processing for custom types (ARRAY, OBJECT)
      */
     static postprocessCustomTypes(
@@ -355,8 +419,13 @@ export class SQLParser {
                         const { processedText: textAfterCustomTypes, customTypes } =
                             this.preprocessCustomTypes(textAfterDeleteUsing);
 
+                        // Preprocess inline comments
+                        const { processedText: textAfterInlineComments, inlineComments } =
+                            this.preprocessInlineComments(textAfterCustomTypes);
+
                         // Preprocess array index syntax
-                        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCustomTypes);
+                        const { processedText, arrayAccesses } =
+                            this.preprocessArrayIndexSyntax(textAfterInlineComments);
 
                         // Parse the processed text
                         const stmtAst = this.parser.astify(processedText);
@@ -369,6 +438,9 @@ export class SQLParser {
 
                         // Apply post-processing for array index syntax
                         processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);
+
+                        // Apply post-processing for inline comments
+                        processedAst = this.postprocessInlineComments(processedAst, inlineComments);
 
                         // Apply post-processing for custom types
                         processedAst = this.postprocessCustomTypes(processedAst, customTypes);
@@ -421,8 +493,12 @@ export class SQLParser {
         // Preprocess SQL for custom types (ARRAY and OBJECT)
         const { processedText: textAfterCustomTypes, customTypes } = this.preprocessCustomTypes(textAfterDeleteUsing);
 
+        // Preprocess inline comments
+        const { processedText: textAfterInlineComments, inlineComments } =
+            this.preprocessInlineComments(textAfterCustomTypes);
+
         // Preprocess array index syntax
-        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCustomTypes);
+        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterInlineComments);
 
         try {
             // Parse the processed text
@@ -436,6 +512,9 @@ export class SQLParser {
 
             // Post-processing for array index syntax
             processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);
+
+            // Post-processing for inline comments
+            processedAst = this.postprocessInlineComments(processedAst, inlineComments);
 
             // Post-processing for custom types
             processedAst = this.postprocessCustomTypes(processedAst, customTypes);
