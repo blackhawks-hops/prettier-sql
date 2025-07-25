@@ -135,6 +135,35 @@ function restoreInlineComments(text: string, statement: any): string {
 }
 
 /**
+ * Helper function to restore block comments from placeholders
+ */
+function restoreBlockComments(statement: any): doc.builders.DocCommand[] {
+    const parts: doc.builders.DocCommand[] = [];
+
+    if (statement.block_comments && statement.block_comments.length > 0) {
+        statement.block_comments.forEach((commentInfo: any) => {
+            parts.push(hardline);
+            // Format multiline comments with proper indentation
+            const commentLines = commentInfo.comment.split("\n");
+            if (commentLines.length > 1) {
+                // Multi-line comment
+                parts.push(commentLines[0]); // /* This is a comment
+                for (let i = 1; i < commentLines.length; i++) {
+                    parts.push(hardline);
+                    // Indent continuation lines including the closing */
+                    parts.push("   " + commentLines[i].trim());
+                }
+            } else {
+                // Single line comment
+                parts.push(commentInfo.comment);
+            }
+        });
+    }
+
+    return parts;
+}
+
+/**
  * Format a CREATE statement
  */
 function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
@@ -454,6 +483,12 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         });
     }
 
+    // Add block comments (between FROM/JOIN and WHERE)
+    const blockCommentParts = restoreBlockComments(ast);
+    if (blockCommentParts.length > 0) {
+        parts.push(...blockCommentParts);
+    }
+
     // Format WHERE clause
     if (ast.where) {
         parts.push(hardline);
@@ -515,6 +550,15 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
 
             parts.push(limitValues.join(", "));
         }
+    }
+
+    // Handle UNION operations
+    if ((ast as any).set_op && (ast as any)._next) {
+        parts.push(hardline);
+        parts.push((ast as any).set_op.toUpperCase());
+
+        // Format the next SELECT statement
+        parts.push(formatSelect((ast as any)._next, false));
     }
 
     if (includeSemicolon) {
@@ -1011,7 +1055,7 @@ function formatBinaryExpression(expr: any, statement?: any): string {
             ? formatBinaryExpression(expr.left, statement)
             : formatExpressionValue(expr.left, statement);
 
-    const right =
+    let right =
         expr.right.type === "binary_expr"
             ? formatBinaryExpression(expr.right, statement)
             : formatExpressionValue(expr.right, statement);
@@ -1051,15 +1095,23 @@ function formatBinaryExpressionWithIndent(expr: any, statement?: any): doc.build
         parts.push(operator);
         parts.push(" ");
 
-        if (expr.right.type === "binary_expr" && ["AND", "OR"].includes(expr.right.operator.toUpperCase())) {
-            parts.push(formatBinaryExpression(expr.right.left, statement));
-            parts.push(hardline);
-            parts.push("  ");
-            parts.push(expr.right.operator.toUpperCase());
-            parts.push(" ");
-            parts.push(formatExpressionValue(expr.right.right, statement));
-        } else {
+        // Handle parentheses for the right side
+        if (expr.right && expr.right.parentheses) {
+            parts.push("(");
+            // Just use formatBinaryExpression to handle the parenthesized content
             parts.push(formatBinaryExpression(expr.right, statement));
+            parts.push(")");
+        } else {
+            if (expr.right.type === "binary_expr" && ["AND", "OR"].includes(expr.right.operator.toUpperCase())) {
+                parts.push(formatBinaryExpression(expr.right.left, statement));
+                parts.push(hardline);
+                parts.push("  ");
+                parts.push(expr.right.operator.toUpperCase());
+                parts.push(" ");
+                parts.push(formatExpressionValue(expr.right.right, statement));
+            } else {
+                parts.push(formatBinaryExpression(expr.right, statement));
+            }
         }
     } else {
         // Simple binary expression
@@ -1098,6 +1150,8 @@ function formatExpressionValue(expr: any, statement?: any): string {
         return processArg(expr, statement); // Use processArg to handle all function cases
     } else if (expr.type === "single_quote_string") {
         return `'${expr.value}'`;
+    } else if (expr.type === "bool") {
+        return expr.value ? "true" : "false";
     }
     return expr.value || "";
 }

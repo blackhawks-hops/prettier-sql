@@ -387,7 +387,7 @@ JOIN latest_version lv USING(list_id, list_version_id)
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Boolean gates in WHERE clause", async () => {
+    test("Boolean gates in WHERE clause", async () => {
         const unformatted = `
       SELECT id, name, email
       FROM users
@@ -405,7 +405,7 @@ WHERE status = 'active'
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Block multiline comments", async () => {
+    test("Block multiline comments", async () => {
         const unformatted = `
       SELECT id, name, email
       FROM users
@@ -426,7 +426,7 @@ WHERE status = 'active'
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Unions", async () => {
+    test("Unions", async () => {
         const unformatted = `
       SELECT id, name FROM users WHERE status = 'active'
       UNION

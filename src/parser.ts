@@ -145,6 +145,37 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for block comments
+     * Returns an object with the processed text and the block comments for post-processing
+     */
+    static preprocessBlockComments(sql: string): {
+        processedText: string;
+        blockComments: Array<{ original: string; placeholder: string; comment: string }>;
+    } {
+        let processedText = sql;
+        const blockComments: Array<{ original: string; placeholder: string; comment: string }> = [];
+
+        // Find block comments (/* comment */)
+        const blockCommentRegex = /\/\*[\s\S]*?\*\//g;
+        let match;
+
+        while ((match = blockCommentRegex.exec(sql)) !== null) {
+            const comment = match[0];
+
+            // Create a placeholder to mark where the comment was
+            const placeholder = `/* BLOCK_COMMENT_PLACEHOLDER_${blockComments.length} */`;
+
+            // Replace the original text with our placeholder
+            processedText = processedText.replace(comment, placeholder);
+
+            // Store the mapping for post-processing
+            blockComments.push({ original: comment, placeholder, comment });
+        }
+
+        return { processedText, blockComments };
+    }
+
+    /**
      * Preprocess SQL for "CREATE OR REPLACE TABLE/VIEW" Snowflake dialect
      * Returns an object with the processed text and the match result for post-processing
      */
@@ -321,6 +352,30 @@ export class SQLParser {
     }
 
     /**
+     * Apply post-processing for block comments
+     */
+    static postprocessBlockComments(
+        ast: any,
+        blockComments: Array<{ original: string; placeholder: string; comment: string }>,
+    ): any {
+        if (!ast || blockComments.length === 0) {
+            return ast;
+        }
+
+        // Store block comment information in the AST for the printer to use
+        if (!Array.isArray(ast)) {
+            ast = [ast];
+        }
+
+        ast.forEach((statement: any) => {
+            // Add block_comments property to the root of each statement
+            statement.block_comments = blockComments;
+        });
+
+        return Array.isArray(ast) && ast.length === 1 ? ast[0] : ast;
+    }
+
+    /**
      * Apply post-processing for custom types (ARRAY, OBJECT)
      */
     static postprocessCustomTypes(
@@ -423,9 +478,13 @@ export class SQLParser {
                         const { processedText: textAfterInlineComments, inlineComments } =
                             this.preprocessInlineComments(textAfterCustomTypes);
 
+                        // Preprocess block comments
+                        const { processedText: textAfterBlockComments, blockComments } =
+                            this.preprocessBlockComments(textAfterInlineComments);
+
                         // Preprocess array index syntax
                         const { processedText, arrayAccesses } =
-                            this.preprocessArrayIndexSyntax(textAfterInlineComments);
+                            this.preprocessArrayIndexSyntax(textAfterBlockComments);
 
                         // Parse the processed text
                         const stmtAst = this.parser.astify(processedText);
@@ -441,6 +500,9 @@ export class SQLParser {
 
                         // Apply post-processing for inline comments
                         processedAst = this.postprocessInlineComments(processedAst, inlineComments);
+
+                        // Apply post-processing for block comments
+                        processedAst = this.postprocessBlockComments(processedAst, blockComments);
 
                         // Apply post-processing for custom types
                         processedAst = this.postprocessCustomTypes(processedAst, customTypes);
@@ -497,8 +559,12 @@ export class SQLParser {
         const { processedText: textAfterInlineComments, inlineComments } =
             this.preprocessInlineComments(textAfterCustomTypes);
 
+        // Preprocess block comments
+        const { processedText: textAfterBlockComments, blockComments } =
+            this.preprocessBlockComments(textAfterInlineComments);
+
         // Preprocess array index syntax
-        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterInlineComments);
+        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterBlockComments);
 
         try {
             // Parse the processed text
@@ -515,6 +581,9 @@ export class SQLParser {
 
             // Post-processing for inline comments
             processedAst = this.postprocessInlineComments(processedAst, inlineComments);
+
+            // Post-processing for block comments
+            processedAst = this.postprocessBlockComments(processedAst, blockComments);
 
             // Post-processing for custom types
             processedAst = this.postprocessCustomTypes(processedAst, customTypes);
