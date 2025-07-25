@@ -261,7 +261,7 @@ AREA_NAME VARCHAR(50) NOT NULL,
 IS_RUSH BOOLEAN NOT NULL,
 POSSESSION_VALUE FLOAT,
 GAME_TYPE VARCHAR(1),
-last_updated DATETIME DEFAULT CURRENT_TIMESTAMP(),
+last_updated TIMESTAMP_NTZ(9) DEFAULT CURRENT_TIMESTAMP(),
 primary key (SEASON, LEAGUE_ID_HAWKS, MANPOWER_CODE, ZONE, AREA_NAME, IS_RUSH)
 );`;
 
@@ -274,7 +274,7 @@ primary key (SEASON, LEAGUE_ID_HAWKS, MANPOWER_CODE, ZONE, AREA_NAME, IS_RUSH)
     , is_rush          BOOLEAN NOT NULL
     , possession_value FLOAT
     , game_type        VARCHAR(1)
-    , last_updated     DATETIME DEFAULT CURRENT_TIMESTAMP()
+    , last_updated     TIMESTAMP_NTZ(9) DEFAULT CURRENT_TIMESTAMP()
     , PRIMARY KEY (season, league_id_hawks, manpower_code, zone, area_name, is_rush)
 )
 ;`;

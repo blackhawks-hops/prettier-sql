@@ -216,10 +216,10 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             parts.push(" (");
 
             // Filter out non-column definitions (like table constraints)
-            const columnDefinitions = ast.create_definitions.filter((def: any) => 
-                def.column && def.column.column && def.definition
+            const columnDefinitions = ast.create_definitions.filter(
+                (def: any) => def.column && def.column.column && def.definition,
             );
-            
+
             // First pass: find maximum column name length for alignment (using lowercase)
             let maxColumnNameLength = 0;
             columnDefinitions.forEach((def: any) => {
@@ -389,7 +389,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                     if (def.resource === "constraint" && def.constraint_type === "primary key") {
                         columnDefs.push(hardline);
                         columnDefs.push(", PRIMARY KEY (");
-                        
+
                         // Handle the column list for compound primary key
                         if (def.definition && Array.isArray(def.definition)) {
                             const keyColumns = def.definition.map((col: any) => {
@@ -402,7 +402,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                             });
                             columnDefs.push(keyColumns.join(", "));
                         }
-                        
+
                         columnDefs.push(")");
                     }
                 });

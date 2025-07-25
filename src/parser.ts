@@ -83,8 +83,10 @@ export class SQLParser {
         // Define patterns for recognizing custom types in column definitions
         // Looking for patterns like: columnName ARRAY, columnName OBJECT, columnName REAL, etc.
         // Also handle NUMBER with precision/scale like: columnName NUMBER(8,0)
+        // Also handle TIMESTAMP_NTZ with precision like: columnName TIMESTAMP_NTZ(9)
         // Note: JSON is already supported by node-sql-parser, so we don't need to handle it here
-        const customTypeRegex = /\b(\w+)\s+(ARRAY|OBJECT|REAL|STRING|VARIANT|NUMBER(?:\(\d+(?:,\d+)?\))?)\b/gi;
+        const customTypeRegex =
+            /\b(\w+)\s+(ARRAY|OBJECT|REAL|STRING|VARIANT|NUMBER(?:\(\d+(?:,\d+)?\))?|TIMESTAMP_NTZ(?:\(\d+\))?)/gi;
         let match;
 
         while ((match = customTypeRegex.exec(sql)) !== null) {
@@ -110,6 +112,9 @@ export class SQLParser {
                 } else {
                     placeholderType = "DECIMAL";
                 }
+            } else if (typeName.startsWith("TIMESTAMP_NTZ")) {
+                // Handle TIMESTAMP_NTZ types as simple TIMESTAMP (no precision to avoid parser issues)
+                placeholderType = "TIMESTAMP";
             }
 
             const placeholder = `${columnName} ${placeholderType}`;
@@ -434,10 +439,20 @@ export class SQLParser {
                                         } else {
                                             column.definition.dataType = "NUMBER";
                                         }
+                                    } else if (customType.type.startsWith("TIMESTAMP_NTZ")) {
+                                        // Extract precision from TIMESTAMP_NTZ(9)
+                                        const params = customType.type.match(/TIMESTAMP_NTZ\((\d+)\)/);
+                                        if (params) {
+                                            column.definition.dataType = "TIMESTAMP_NTZ";
+                                            column.definition.length = parseInt(params[1]);
+                                            column.definition.parentheses = true;
+                                        } else {
+                                            column.definition.dataType = "TIMESTAMP_NTZ";
+                                        }
                                     } else {
                                         // Restore the original type for other custom types
                                         column.definition.dataType = customType.type;
-                                        
+
                                         // Clear any length property since ARRAY and OBJECT don't have lengths
                                         delete column.definition.length;
                                     }
