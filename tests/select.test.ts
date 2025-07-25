@@ -446,5 +446,5 @@ WHERE status = 'active'
 
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
-    })
+    });
 });

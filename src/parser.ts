@@ -144,7 +144,7 @@ export class SQLParser {
         if (match) {
             const [, deleteFrom, using, whereCondition] = match;
             usingClause = using.trim();
-            
+
             // Remove the USING clause from the SQL to make it parseable by node-sql-parser
             processedText = `${deleteFrom} WHERE ${whereCondition}`;
         }
@@ -419,8 +419,7 @@ export class SQLParser {
             this.preprocessDeleteUsing(textAfterCreateOrReplace);
 
         // Preprocess SQL for custom types (ARRAY and OBJECT)
-        const { processedText: textAfterCustomTypes, customTypes } =
-            this.preprocessCustomTypes(textAfterDeleteUsing);
+        const { processedText: textAfterCustomTypes, customTypes } = this.preprocessCustomTypes(textAfterDeleteUsing);
 
         // Preprocess array index syntax
         const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterCustomTypes);

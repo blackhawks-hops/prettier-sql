@@ -21,7 +21,7 @@ WHERE id = 1
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Delete using another table", async () => {
+    test("Delete using another table", async () => {
         const unformatted = `delete from public.user where id in (select id from temp_users);`;
         const expected = `DELETE FROM public.user
 WHERE id IN (
@@ -52,7 +52,7 @@ WHERE public.user.id = tu.id
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Delete where exists", async () => {
+    test("Delete where exists", async () => {
         const unformatted = `delete from public.user where exists (select 1 from temp_users where temp_users.id = public.user.id);`;
         const expected = `DELETE FROM public.user
 WHERE EXISTS (

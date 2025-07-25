@@ -515,8 +515,10 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
                 formattedColumn = formatColumnRef(column.expr);
             } else if (column.expr.type === "star") {
                 formattedColumn = "*";
+            } else if (column.expr.type === "number") {
+                formattedColumn = column.expr.value.toString();
             } else {
-                formattedColumn = column.expr.value || "";
+                formattedColumn = String(column.expr.value || "");
             }
 
             // Add alias if it exists
@@ -751,7 +753,10 @@ function formatAggregationFunction(func: any): string {
 function formatColumnRef(columnRef: any): string {
     if (!columnRef.column) return "";
 
-    if (columnRef.table) {
+    // Handle schema.table.column references
+    if (columnRef.db && columnRef.table) {
+        return `${columnRef.db}.${columnRef.table}.${columnRef.column}`;
+    } else if (columnRef.table) {
         return `${columnRef.table}.${columnRef.column}`;
     }
 
@@ -921,6 +926,29 @@ function formatWhere(where: any, statement?: any): doc.builders.DocCommand {
             parts.push(")");
         } else {
             parts.push(formatExpressionValue(where.right, statement));
+        }
+    } else if (where.type === "function" && where.name?.name?.[0]?.value === "exists") {
+        // Special handling for EXISTS clause with subquery
+        parts.push(" EXISTS ");
+
+        // Check if args contains a subquery
+        if (where.args && where.args.type === "expr_list" && where.args.value && where.args.value.length > 0) {
+            const subquery = where.args.value[0];
+            if (subquery && subquery.ast && subquery.ast.type === "select") {
+                parts.push("(");
+                parts.push(indent(formatSelect(subquery.ast, false)));
+                parts.push(hardline);
+                parts.push(")");
+                return join("", parts);
+            }
+        }
+
+        // If no subquery found in args, check direct args property
+        if (where.args && where.args.ast && where.args.ast.type === "select") {
+            parts.push("(");
+            parts.push(indent(formatSelect(where.args.ast, false)));
+            parts.push(hardline);
+            parts.push(")");
         }
     } else {
         parts.push(" ");
@@ -1154,56 +1182,54 @@ function shouldAddBlankLine(prevStmt: any, currStmt: any): boolean {
 function formatCTEInUsing(innerSql: string): doc.builders.DocCommand {
     // Basic formatting for CTE in USING clause
     const parts: doc.builders.DocCommand[] = [];
-    
+
     // Look for WITH clause pattern
     const withMatch = innerSql.match(/^(with\s+\w+\s+as\s*\([^)]+\))\s+(.+)$/i);
     if (withMatch) {
         const [, withClause, selectClause] = withMatch;
-        
-        // Format the WITH clause with proper indentation
-        parts.push("WITH ");
+
+        // Format the WITH clause with proper indentation (4 spaces)
+        parts.push("    WITH ");
         const cteMatch = withClause.match(/with\s+(\w+)\s+as\s*\(([^)]+)\)/i);
         if (cteMatch) {
             const [, cteName, cteQuery] = cteMatch;
             parts.push(cteName);
             parts.push(" AS (");
             parts.push(hardline);
-            
+
             // Format the inner query with proper case and structure
             const innerQuery = cteQuery.trim();
             // Parse the inner query to format it properly
             const selectMatch = innerQuery.match(/^select\s+(.+?)\s+from\s+(.+)$/i);
             if (selectMatch) {
                 const [, selectList, fromClause] = selectMatch;
-                parts.push(indent([
-                    "SELECT " + selectList.trim(),
-                    hardline,
-                    "FROM " + fromClause.trim()
-                ]));
+                parts.push("        SELECT " + selectList.trim());
+                parts.push(hardline);
+                parts.push("        FROM " + fromClause.trim());
             } else {
-                parts.push(indent([innerQuery.toUpperCase()]));
+                parts.push("        " + innerQuery.toUpperCase());
             }
-            
+
             parts.push(hardline);
-            parts.push(")");
+            parts.push("    )");
         }
-        
+
         parts.push(hardline);
-        // Format the outer SELECT with proper indentation
+        // Format the outer SELECT with proper indentation (4 spaces)
         const outerSelectMatch = selectClause.trim().match(/^select\s+(.+?)\s+from\s+(.+)$/i);
         if (outerSelectMatch) {
             const [, selectList, fromClause] = outerSelectMatch;
-            parts.push("SELECT " + selectList.trim());
+            parts.push("    SELECT " + selectList.trim());
             parts.push(hardline);
-            parts.push("FROM " + fromClause.trim());
+            parts.push("    FROM " + fromClause.trim());
         } else {
-            parts.push(selectClause.trim().toUpperCase());
+            parts.push("    " + selectClause.trim().toUpperCase());
         }
     } else {
         // Fallback for other patterns
-        parts.push(innerSql.trim().replace(/\s+/g, ' ').toUpperCase());
+        parts.push(innerSql.trim().replace(/\s+/g, " ").toUpperCase());
     }
-    
+
     return join("", parts);
 }
 
@@ -1212,7 +1238,7 @@ function formatCTEInUsing(innerSql: string): doc.builders.DocCommand {
  */
 function formatDelete(ast: Delete, includeSemicolon: boolean = true): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-    
+
     // DELETE keyword
     parts.push("DELETE FROM");
 
@@ -1238,28 +1264,26 @@ function formatDelete(ast: Delete, includeSemicolon: boolean = true): doc.builde
         parts.push(hardline);
         parts.push("USING ");
         const usingClause = (ast as any).using;
-        
+
         // Check if the USING clause has an alias at the end
         const aliasMatch = usingClause.match(/^(.+?)\s+AS\s+(\w+)$/i);
         let mainClause = usingClause;
         let alias = null;
-        
+
         if (aliasMatch) {
             mainClause = aliasMatch[1].trim();
             alias = aliasMatch[2];
         }
-        
+
         // Check if the main clause is a subquery (starts with parentheses)
-        if (mainClause.startsWith('(') && mainClause.endsWith(')')) {
+        if (mainClause.startsWith("(") && mainClause.endsWith(")")) {
             const innerSql = mainClause.slice(1, -1).trim();
-            
+
             // Check if it contains WITH (CTE) - format it specially
-            if (innerSql.toLowerCase().includes('with ')) {
+            if (innerSql.toLowerCase().includes("with ")) {
                 parts.push("(");
                 parts.push(hardline);
-                parts.push(indent([
-                    formatCTEInUsing(innerSql)
-                ]));
+                parts.push(formatCTEInUsing(innerSql));
                 parts.push(hardline);
                 parts.push(")");
             } else {
@@ -1272,7 +1296,7 @@ function formatDelete(ast: Delete, includeSemicolon: boolean = true): doc.builde
         } else {
             parts.push(mainClause);
         }
-        
+
         // Add alias if present
         if (alias) {
             parts.push(" AS ");
