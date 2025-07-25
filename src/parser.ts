@@ -82,20 +82,34 @@ export class SQLParser {
 
         // Define patterns for recognizing custom types in column definitions
         // Looking for patterns like: columnName ARRAY, columnName OBJECT, columnName REAL, etc.
+        // Also handle NUMBER with precision/scale like: columnName NUMBER(8,0)
         // Note: JSON is already supported by node-sql-parser, so we don't need to handle it here
-        const customTypeRegex = /\b(\w+)\s+(ARRAY|OBJECT|REAL|STRING|VARIANT)\b/gi;
+        const customTypeRegex = /\b(\w+)\s+(ARRAY|OBJECT|REAL|STRING|VARIANT|NUMBER(?:\(\d+(?:,\d+)?\))?)\b/gi;
         let match;
 
         while ((match = customTypeRegex.exec(sql)) !== null) {
-            const original = match[0]; // e.g., "data OBJECT" or "tags ARRAY" or "id REAL"
-            const columnName = match[1]; // e.g., "data" or "tags" or "id"
-            const typeName = match[2].toUpperCase(); // "ARRAY", "OBJECT", "REAL", etc.
+            const original = match[0]; // e.g., "data OBJECT" or "tags ARRAY" or "season NUMBER(8,0)"
+            const columnName = match[1]; // e.g., "data" or "tags" or "season"
+            const typeName = match[2].toUpperCase(); // "ARRAY", "OBJECT", "REAL", "NUMBER(8,0)", etc.
 
             // Create a placeholder using a supported type as a temporary type
             // node-sql-parser supports these types, so we'll use them as placeholders
             let placeholderType = "VARCHAR";
             if (typeName === "REAL") {
                 placeholderType = "FLOAT"; // REAL is similar to FLOAT
+            } else if (typeName.startsWith("NUMBER")) {
+                // Handle NUMBER types (with or without precision/scale) as DECIMAL
+                if (typeName.includes("(")) {
+                    // Extract precision and scale from NUMBER(p,s) and convert to DECIMAL(p,s)
+                    const params = typeName.match(/NUMBER\((\d+(?:,\d+)?)\)/);
+                    if (params) {
+                        placeholderType = `DECIMAL(${params[1]})`;
+                    } else {
+                        placeholderType = "DECIMAL";
+                    }
+                } else {
+                    placeholderType = "DECIMAL";
+                }
             }
 
             const placeholder = `${columnName} ${placeholderType}`;
@@ -406,11 +420,27 @@ export class SQLParser {
 
                                 // Check if this is the column we need to restore
                                 if (column.column?.column === columnName) {
-                                    // Restore the original type
-                                    column.definition.dataType = customType.type;
-
-                                    // Clear any length property since ARRAY and OBJECT don't have lengths
-                                    delete column.definition.length;
+                                    // For NUMBER types, preserve precision and scale information
+                                    if (customType.type.startsWith("NUMBER")) {
+                                        // Extract precision and scale from NUMBER(8,0)
+                                        const params = customType.type.match(/NUMBER\((\d+)(?:,(\d+))?\)/);
+                                        if (params) {
+                                            column.definition.dataType = "NUMBER";
+                                            column.definition.length = parseInt(params[1]);
+                                            if (params[2] !== undefined) {
+                                                column.definition.scale = parseInt(params[2]);
+                                            }
+                                            column.definition.parentheses = true;
+                                        } else {
+                                            column.definition.dataType = "NUMBER";
+                                        }
+                                    } else {
+                                        // Restore the original type for other custom types
+                                        column.definition.dataType = customType.type;
+                                        
+                                        // Clear any length property since ARRAY and OBJECT don't have lengths
+                                        delete column.definition.length;
+                                    }
                                 }
                             }
                         }

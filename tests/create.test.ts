@@ -171,7 +171,7 @@ WITH arena_city AS (
 )
 SELECT t.arena_id AS venue_id_eliteprospects
      , t.arena_name AS venue_name
-     , c.city::varchar AS city
+     , c.city::VARCHAR AS city
      , t.country_id AS country_abbr
      , t.country_name AS country
      , MAX(last_updated) AS last_updated
@@ -245,6 +245,38 @@ ORDER BY t.arena_id
     , name VARCHAR(100)
 )
 COMMENT 'This is a sample table'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("create with compound primary key", async () => {
+        const unformatted = `CREATE OR REPLACE TABLE HAWKS.THING (
+SEASON NUMBER(8,0) NOT NULL,
+LEAGUE_ID_HAWKS NUMBER(38,0) NOT NULL,
+MANPOWER_CODE NUMBER(4,0) NOT NULL,
+ZONE VARCHAR(2) NOT NULL,
+AREA_NAME VARCHAR(50) NOT NULL,
+IS_RUSH BOOLEAN NOT NULL,
+POSSESSION_VALUE FLOAT,
+GAME_TYPE VARCHAR(1),
+last_updated DATETIME DEFAULT CURRENT_TIMESTAMP(),
+primary key (SEASON, LEAGUE_ID_HAWKS, MANPOWER_CODE, ZONE, AREA_NAME, IS_RUSH)
+);`;
+
+        const expected = `CREATE OR REPLACE TABLE hawks.thing (
+      season           NUMBER(8,0) NOT NULL
+    , league_id_hawks  NUMBER(38,0) NOT NULL
+    , manpower_code    NUMBER(4,0) NOT NULL
+    , zone             VARCHAR(2) NOT NULL
+    , area_name        VARCHAR(50) NOT NULL
+    , is_rush          BOOLEAN NOT NULL
+    , possession_value FLOAT
+    , game_type        VARCHAR(1)
+    , last_updated     DATETIME DEFAULT CURRENT_TIMESTAMP()
+    , PRIMARY KEY (season, league_id_hawks, manpower_code, zone, area_name, is_rush)
+)
 ;`;
 
         const formatted = await prettier.format(unformatted, options);

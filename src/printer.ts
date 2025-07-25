@@ -198,11 +198,16 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         if (ast.table && ast.table.length > 0) {
             const tableRef = ast.table[0];
 
-            // Include schema/database name if available
+            // Include schema/database name if available (all lowercase)
             if (tableRef.db) {
-                parts.push(`${tableRef.db}.${tableRef.table}`);
+                // Handle specific schema name transformation
+                let schemaName = tableRef.db.toLowerCase();
+                if (schemaName === "hawks_analytics") {
+                    schemaName = "hawks";
+                }
+                parts.push(`${schemaName}.${tableRef.table.toLowerCase()}`);
             } else if (tableRef.table) {
-                parts.push(tableRef.table);
+                parts.push(tableRef.table.toLowerCase());
             }
         }
 
@@ -210,27 +215,28 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         if (ast.create_definitions && ast.create_definitions.length > 0) {
             parts.push(" (");
 
-            // First pass: find maximum column name length for alignment
+            // Filter out non-column definitions (like table constraints)
+            const columnDefinitions = ast.create_definitions.filter((def: any) => 
+                def.column && def.column.column && def.definition
+            );
+            
+            // First pass: find maximum column name length for alignment (using lowercase)
             let maxColumnNameLength = 0;
-            ast.create_definitions.forEach((def: any) => {
-                if (def.column && def.column.column) {
-                    maxColumnNameLength = Math.max(maxColumnNameLength, def.column.column.length);
-                }
+            columnDefinitions.forEach((def: any) => {
+                maxColumnNameLength = Math.max(maxColumnNameLength, def.column.column.toLowerCase().length);
             });
 
             // Create column definitions with proper indentation and alignment
             const columnDefs: doc.builders.DocCommand[] = [];
 
-            ast.create_definitions.forEach((def: any, index: number) => {
+            columnDefinitions.forEach((def: any, index: number) => {
                 columnDefs.push(hardline);
                 columnDefs.push(index > 0 ? ", " : "  ");
 
-                // Column name with padding for alignment
-                if (def.column && def.column.column) {
-                    const columnName = def.column.column;
-                    const padding = " ".repeat(maxColumnNameLength - columnName.length);
-                    columnDefs.push(columnName + padding);
-                }
+                // Column name with padding for alignment (lowercase)
+                const columnName = def.column.column.toLowerCase();
+                const padding = " ".repeat(Math.max(0, maxColumnNameLength - columnName.length));
+                columnDefs.push(columnName + padding);
 
                 // Data type
                 if (def.definition) {
@@ -376,6 +382,31 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                     }
                 }
             });
+
+            // Handle table-level constraints (like compound primary keys)
+            if (ast.create_definitions) {
+                ast.create_definitions.forEach((def: any) => {
+                    if (def.resource === "constraint" && def.constraint_type === "primary key") {
+                        columnDefs.push(hardline);
+                        columnDefs.push(", PRIMARY KEY (");
+                        
+                        // Handle the column list for compound primary key
+                        if (def.definition && Array.isArray(def.definition)) {
+                            const keyColumns = def.definition.map((col: any) => {
+                                if (typeof col === "string") {
+                                    return col.toLowerCase();
+                                } else if (col.column) {
+                                    return col.column.toLowerCase();
+                                }
+                                return col;
+                            });
+                            columnDefs.push(keyColumns.join(", "));
+                        }
+                        
+                        columnDefs.push(")");
+                    }
+                });
+            }
 
             // Add the indented column definitions to the parts array
             parts.push(indent(join("", columnDefs)));
@@ -913,14 +944,23 @@ function formatAggregationFunction(func: any): string {
 function formatColumnRef(columnRef: any): string {
     if (!columnRef.column) return "";
 
-    // Handle schema.table.column references
+    // Helper function to handle casting syntax (column::TYPE)
+    const formatColumnWithCasting = (columnName: string): string => {
+        if (columnName.includes("::")) {
+            const [column, castType] = columnName.split("::");
+            return `${column.toLowerCase()}::${castType.toUpperCase()}`;
+        }
+        return columnName.toLowerCase();
+    };
+
+    // Handle schema.table.column references (column names lowercase, cast types uppercase)
     if (columnRef.db && columnRef.table) {
-        return `${columnRef.db}.${columnRef.table}.${columnRef.column}`;
+        return `${columnRef.db}.${columnRef.table}.${formatColumnWithCasting(columnRef.column)}`;
     } else if (columnRef.table) {
-        return `${columnRef.table}.${columnRef.column}`;
+        return `${columnRef.table}.${formatColumnWithCasting(columnRef.column)}`;
     }
 
-    return columnRef.column;
+    return formatColumnWithCasting(columnRef.column);
 }
 
 /**
