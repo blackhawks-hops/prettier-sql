@@ -54,11 +54,19 @@ FROM temp_users
         expect(formatted.trim()).toBe(expected);
     });
 
-    test("Insert multiple values", async () => {
-        const unformatted = `insert into public.users (id, name) values (1, 'Alice'), (2, 'Bob');`;
-        const expected = `INSERT INTO public.users (id, name)
-VALUES (1, 'Alice')
-     , (2, 'Bob')
+    test("Insert multiple values without columns specified", async () => {
+        const unformatted = `insert into foo.bar
+        values
+        (20122013,'R',874,-0.25,CURRENT_TIMESTAMP(),'thing1'),
+        (20132014,'R',874,-0.25,CURRENT_TIMESTAMP(),'thing2'),
+        (20142015,'R',874,-0.25,CURRENT_TIMESTAMP(),'thing1'),
+        (20152016,'R',874,-0.25,CURRENT_TIMESTAMP(),'thing2');`;
+
+        const expected = `INSERT INTO foo.bar
+VALUES (20122013, 'R', 874, -0.25, CURRENT_TIMESTAMP(), 'thing1')
+     , (20132014, 'R', 874, -0.25, CURRENT_TIMESTAMP(), 'thing2')
+     , (20142015, 'R', 874, -0.25, CURRENT_TIMESTAMP(), 'thing1')
+     , (20152016, 'R', 874, -0.25, CURRENT_TIMESTAMP(), 'thing2')
 ;`;
 
         const formatted = await prettier.format(unformatted, options);

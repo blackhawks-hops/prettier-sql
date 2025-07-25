@@ -705,6 +705,9 @@ function formatInsert(ast: any, includeSemicolon: boolean = true): doc.builders.
                                 parts.push(`'${value.value}'`);
                             } else if (value.type === "number") {
                                 parts.push(value.value.toString());
+                            } else if (value.type === "function") {
+                                // Handle function calls like CURRENT_TIMESTAMP()
+                                parts.push(formatFunction(value));
                             } else if (value.value !== undefined) {
                                 // Fallback for other structured values
                                 if (typeof value.value === "string") {
