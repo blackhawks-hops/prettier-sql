@@ -1,6 +1,6 @@
 import { doc } from "prettier";
 import { SQLNode } from "./types";
-import { AST, Select, Create, Update, Delete, Insert, TableExpr } from "node-sql-parser";
+import { AST, Select, Create, Update, Delete, TableExpr } from "node-sql-parser";
 
 // Define our custom AST types
 interface GrantAst {
@@ -94,7 +94,7 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
         case "delete":
             return formatDelete(ast as Delete, includeSemicolon);
         case "insert":
-            return formatInsert(ast as Insert, includeSemicolon);
+            return formatInsert(ast as any, includeSemicolon);
         case "grant":
             return formatGrant(ast as GrantAst);
         case "comment":
@@ -208,6 +208,17 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                 parts.push(`${schemaName}.${tableRef.table.toLowerCase()}`);
             } else if (tableRef.table) {
                 parts.push(tableRef.table.toLowerCase());
+            }
+        }
+
+        // Handle LIKE clause for CREATE TABLE ... LIKE ...
+        if (ast.like && ast.like.table && Array.isArray(ast.like.table) && ast.like.table.length > 0) {
+            parts.push(" LIKE ");
+            const likeTable = ast.like.table[0];
+            if (likeTable.db) {
+                parts.push(`${likeTable.db}.${likeTable.table}`);
+            } else {
+                parts.push(likeTable.table);
             }
         }
 
@@ -614,7 +625,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
 /**
  * Format an INSERT statement
  */
-function formatInsert(ast: Insert, includeSemicolon: boolean = true): doc.builders.DocCommand {
+function formatInsert(ast: any, includeSemicolon: boolean = true): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
 
     // INSERT INTO keyword
@@ -661,10 +672,62 @@ function formatInsert(ast: Insert, includeSemicolon: boolean = true): doc.builde
         }
     }
 
-    // SELECT statement
-    if (ast.values && ast.values.type === "select") {
-        // Format the SELECT statement without semicolon
-        parts.push(formatSelect(ast.values as Select, false));
+    // Handle VALUES clause or SELECT statement
+    if (ast.values) {
+        if (ast.values.type === "select") {
+            // Format the SELECT statement without semicolon
+            parts.push(formatSelect(ast.values as Select, false));
+        } else if (Array.isArray(ast.values)) {
+            // Handle VALUES clause with multiple value tuples
+            parts.push(hardline);
+            parts.push("VALUES ");
+
+            ast.values.forEach((valueRow: any, index: number) => {
+                if (index > 0) {
+                    parts.push(hardline);
+                    parts.push("     , ");
+                }
+
+                parts.push("(");
+
+                // Handle expr_list structure: valueRow = {type: "expr_list", value: [array of values]}
+                if (valueRow && valueRow.type === "expr_list" && Array.isArray(valueRow.value)) {
+                    valueRow.value.forEach((value: any, valueIndex: number) => {
+                        if (valueIndex > 0) {
+                            parts.push(", ");
+                        }
+
+                        // Format individual values based on their type
+                        if (value === null || value === undefined) {
+                            parts.push("NULL");
+                        } else if (value && typeof value === "object") {
+                            if (value.type === "single_quote_string") {
+                                parts.push(`'${value.value}'`);
+                            } else if (value.type === "number") {
+                                parts.push(value.value.toString());
+                            } else if (value.value !== undefined) {
+                                // Fallback for other structured values
+                                if (typeof value.value === "string") {
+                                    parts.push(`'${value.value}'`);
+                                } else {
+                                    parts.push(String(value.value));
+                                }
+                            } else {
+                                parts.push(String(value));
+                            }
+                        } else if (typeof value === "string") {
+                            parts.push(`'${value}'`);
+                        } else if (typeof value === "number") {
+                            parts.push(value.toString());
+                        } else {
+                            parts.push(String(value));
+                        }
+                    });
+                }
+
+                parts.push(")");
+            });
+        }
     }
 
     if (includeSemicolon) {

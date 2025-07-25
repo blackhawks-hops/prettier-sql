@@ -282,4 +282,13 @@ primary key (SEASON, LEAGUE_ID_HAWKS, MANPOWER_CODE, ZONE, AREA_NAME, IS_RUSH)
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Create a table like another", async () => {
+        const unformatted = `create table public.user LIKE private.user;`;
+        const expected = `CREATE TABLE public.user LIKE private.user
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

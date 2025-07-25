@@ -53,4 +53,15 @@ FROM temp_users
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Insert multiple values", async () => {
+        const unformatted = `insert into public.users (id, name) values (1, 'Alice'), (2, 'Bob');`;
+        const expected = `INSERT INTO public.users (id, name)
+VALUES (1, 'Alice')
+     , (2, 'Bob')
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
