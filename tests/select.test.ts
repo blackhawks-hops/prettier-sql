@@ -447,4 +447,79 @@ WHERE status = 'active'
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("UNION DISTINCT", async () => {
+        const unformatted = `
+      SELECT id, name FROM users WHERE status = 'active'
+      UNION DISTINCT
+      SELECT id, name FROM customers WHERE status = 'active';
+    `;
+
+        const expected = `SELECT id
+     , name
+FROM users
+WHERE status = 'active'
+UNION DISTINCT
+SELECT id
+     , name
+FROM customers
+WHERE status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("UNION ALL", async () => {
+        const unformatted = `
+      SELECT id, name, email FROM users WHERE created_at > '2023-01-01'
+      UNION ALL
+      SELECT id, name, email FROM customers WHERE created_at > '2023-01-01';
+    `;
+
+        const expected = `SELECT id
+     , name
+     , email
+FROM users
+WHERE created_at > '2023-01-01'
+UNION ALL
+SELECT id
+     , name
+     , email
+FROM customers
+WHERE created_at > '2023-01-01'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("Multiple UNIONs", async () => {
+        const unformatted = `
+      SELECT id, name FROM users WHERE status = 'active'
+      UNION
+      SELECT id, name FROM customers WHERE status = 'active'
+      UNION ALL
+      SELECT id, name FROM vendors WHERE status = 'active';
+    `;
+
+        const expected = `SELECT id
+     , name
+FROM users
+WHERE status = 'active'
+UNION
+SELECT id
+     , name
+FROM customers
+WHERE status = 'active'
+UNION ALL
+SELECT id
+     , name
+FROM vendors
+WHERE status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

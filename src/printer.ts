@@ -1,6 +1,6 @@
 import { doc } from "prettier";
 import { SQLNode } from "./types";
-import { AST, Select, Create, Update, Delete, TableExpr } from "node-sql-parser";
+import { AST, Select, Create, Update, Delete, Insert, TableExpr } from "node-sql-parser";
 
 // Define our custom AST types
 interface GrantAst {
@@ -93,6 +93,8 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
             return formatUpdate(ast as Update, includeSemicolon);
         case "delete":
             return formatDelete(ast as Delete, includeSemicolon);
+        case "insert":
+            return formatInsert(ast as Insert, includeSemicolon);
         case "grant":
             return formatGrant(ast as GrantAst);
         case "comment":
@@ -565,6 +567,70 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(hardline);
         parts.push(";");
     }
+    return join("", parts);
+}
+
+/**
+ * Format an INSERT statement
+ */
+function formatInsert(ast: Insert, includeSemicolon: boolean = true): doc.builders.DocCommand {
+    const parts: doc.builders.DocCommand[] = [];
+
+    // INSERT INTO keyword
+    parts.push("INSERT INTO");
+
+    // Table name
+    if (ast.table && Array.isArray(ast.table) && ast.table.length > 0) {
+        const table = ast.table[0] as any;
+        parts.push(" ");
+        if (table.db) {
+            parts.push(`${table.db}.${table.table}`);
+        } else {
+            parts.push(table.table);
+        }
+    }
+
+    // Column list (optional)
+    if (ast.columns && Array.isArray(ast.columns)) {
+        const hasCTE = ast.values && (ast.values as any).with && Array.isArray((ast.values as any).with);
+
+        if (ast.columns.length <= 2 && !hasCTE) {
+            // Short column list on same line (only if no CTE)
+            parts.push(" (");
+            parts.push(ast.columns.join(", "));
+            parts.push(")");
+        } else {
+            // Long column list with indentation
+            parts.push(" (");
+            parts.push(hardline);
+            parts.push("      ");
+
+            const columnParts: doc.builders.DocCommand[] = [];
+            ast.columns.forEach((column: string, index: number) => {
+                if (index > 0) {
+                    columnParts.push(hardline);
+                    columnParts.push("    , ");
+                }
+                columnParts.push(column);
+            });
+
+            parts.push(join("", columnParts));
+            parts.push(hardline);
+            parts.push(")");
+        }
+    }
+
+    // SELECT statement
+    if (ast.values && ast.values.type === "select") {
+        // Format the SELECT statement without semicolon
+        parts.push(formatSelect(ast.values as Select, false));
+    }
+
+    if (includeSemicolon) {
+        parts.push(hardline);
+        parts.push(";");
+    }
+
     return join("", parts);
 }
 

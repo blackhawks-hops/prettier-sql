@@ -10,7 +10,7 @@ const options = {
 };
 
 describe("INSERT", () => {
-    test.skip("Simple blind insert", async () => {
+    test("Simple blind insert", async () => {
         const unformatted = `insert into public.users select * from temp_users;`;
 
         const expected = `INSERT INTO public.users
@@ -22,7 +22,7 @@ FROM temp_users
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Insert with specific columns", async () => {
+    test("Insert with specific columns", async () => {
         const unformatted = `insert into public.users (id, name) select id, name from temp_users;`;
         const expected = `INSERT INTO public.users (id, name)
 SELECT id
@@ -34,7 +34,7 @@ FROM temp_users
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("Insert with a CTE", async () => {
+    test("Insert with a CTE", async () => {
         const unformatted = `insert into public.users (id, name) with temp_users as (select id, name from users) select id, name from temp_users;`;
         const expected = `INSERT INTO public.users (
       id
