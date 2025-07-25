@@ -272,6 +272,45 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for GREATEST and LEAST functions that are not supported by node-sql-parser
+     * Returns an object with the processed text and the function calls for post-processing
+     */
+    static preprocessGreatestLeast(sql: string): {
+        processedText: string;
+        greatestLeastFunctions: Array<{ original: string; placeholder: string; functionName: string }>;
+    } {
+        let processedText = sql;
+        const greatestLeastFunctions: Array<{ original: string; placeholder: string; functionName: string }> = [];
+
+        // Find GREATEST and LEAST function calls with their full argument lists
+        // This regex captures the function name and its complete argument list including nested parentheses
+        const functionCallRegex = /\b(GREATEST|LEAST)\s*(\([^()]*(?:\([^()]*\)[^()]*)*\))/gi;
+        let match;
+
+        while ((match = functionCallRegex.exec(sql)) !== null) {
+            const functionName = match[1].toUpperCase();
+            const fullCall = match[0]; // e.g., "GREATEST(col1::DATE, col2::DATE)"
+            const args = match[2]; // e.g., "(col1::DATE, col2::DATE)"
+
+            // Create a unique placeholder using COALESCE which is supported by node-sql-parser
+            // We'll use a pattern that won't conflict with real SQL: __GREATEST_N__ or __LEAST_N__
+            const placeholder = `COALESCE(__${functionName}_${greatestLeastFunctions.length}__, NULL)`;
+
+            // Replace the function call with our placeholder
+            processedText = processedText.replace(fullCall, placeholder);
+
+            // Store the mapping for post-processing
+            greatestLeastFunctions.push({
+                original: fullCall,
+                placeholder: placeholder,
+                functionName: functionName,
+            });
+        }
+
+        return { processedText, greatestLeastFunctions };
+    }
+
+    /**
      * Apply post-processing for "CREATE OR REPLACE" statements to set the ignore_replace property
      */
     static postprocessCreateOrReplace(ast: any, createOrReplaceMatch: RegExpExecArray | null): any {
@@ -471,6 +510,30 @@ export class SQLParser {
     }
 
     /**
+     * Apply post-processing for GREATEST and LEAST functions
+     */
+    static postprocessGreatestLeast(
+        ast: any,
+        greatestLeastFunctions: Array<{ original: string; placeholder: string; functionName: string }>,
+    ): any {
+        if (!ast || greatestLeastFunctions.length === 0) {
+            return ast;
+        }
+
+        // Store GREATEST/LEAST function information in the AST for the printer to use
+        if (!Array.isArray(ast)) {
+            ast = [ast];
+        }
+
+        ast.forEach((statement: any) => {
+            // Add greatest_least_functions property to the root of each statement
+            statement.greatest_least_functions = greatestLeastFunctions;
+        });
+
+        return Array.isArray(ast) && ast.length === 1 ? ast[0] : ast;
+    }
+
+    /**
      * Parse SQL code into an AST
      */
     static parse(text: string): SQLNode {
@@ -519,9 +582,13 @@ export class SQLParser {
                         const { processedText: textAfterCustomTypes, customTypes } =
                             this.preprocessCustomTypes(textAfterDeleteUsing);
 
+                        // Preprocess GREATEST and LEAST functions
+                        const { processedText: textAfterGreatestLeast, greatestLeastFunctions } =
+                            this.preprocessGreatestLeast(textAfterCustomTypes);
+
                         // Preprocess inline comments
                         const { processedText: textAfterInlineComments, inlineComments } =
-                            this.preprocessInlineComments(textAfterCustomTypes);
+                            this.preprocessInlineComments(textAfterGreatestLeast);
 
                         // Preprocess block comments
                         const { processedText: textAfterBlockComments, blockComments } =
@@ -548,6 +615,9 @@ export class SQLParser {
 
                         // Apply post-processing for block comments
                         processedAst = this.postprocessBlockComments(processedAst, blockComments);
+
+                        // Apply post-processing for GREATEST and LEAST functions
+                        processedAst = this.postprocessGreatestLeast(processedAst, greatestLeastFunctions);
 
                         // Apply post-processing for custom types
                         processedAst = this.postprocessCustomTypes(processedAst, customTypes);
@@ -600,9 +670,13 @@ export class SQLParser {
         // Preprocess SQL for custom types (ARRAY and OBJECT)
         const { processedText: textAfterCustomTypes, customTypes } = this.preprocessCustomTypes(textAfterDeleteUsing);
 
+        // Preprocess GREATEST and LEAST functions
+        const { processedText: textAfterGreatestLeast, greatestLeastFunctions } =
+            this.preprocessGreatestLeast(textAfterCustomTypes);
+
         // Preprocess inline comments
         const { processedText: textAfterInlineComments, inlineComments } =
-            this.preprocessInlineComments(textAfterCustomTypes);
+            this.preprocessInlineComments(textAfterGreatestLeast);
 
         // Preprocess block comments
         const { processedText: textAfterBlockComments, blockComments } =
@@ -629,6 +703,9 @@ export class SQLParser {
 
             // Post-processing for block comments
             processedAst = this.postprocessBlockComments(processedAst, blockComments);
+
+            // Post-processing for GREATEST and LEAST functions
+            processedAst = this.postprocessGreatestLeast(processedAst, greatestLeastFunctions);
 
             // Post-processing for custom types
             processedAst = this.postprocessCustomTypes(processedAst, customTypes);

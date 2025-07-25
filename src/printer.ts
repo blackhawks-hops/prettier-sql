@@ -816,6 +816,46 @@ function formatFunction(func: any, statement?: any): string {
 
     funcName = funcName.toUpperCase();
 
+    // Check if this is a COALESCE placeholder for GREATEST/LEAST functions
+    if (
+        funcName === "COALESCE" &&
+        statement?.greatest_least_functions &&
+        Array.isArray(statement.greatest_least_functions)
+    ) {
+        // Check if the first argument is a placeholder
+        if (
+            func.args &&
+            func.args.type === "expr_list" &&
+            Array.isArray(func.args.value) &&
+            func.args.value.length > 0
+        ) {
+            const firstArg = func.args.value[0];
+            if (firstArg && firstArg.type === "column_ref" && firstArg.column) {
+                const argValue = firstArg.column;
+                // Look for our placeholder pattern: __GREATEST_N__ or __LEAST_N__
+                const placeholderMatch = argValue.match(/^__([A-Z]+)_(\d+)__$/);
+                if (placeholderMatch) {
+                    const functionType = placeholderMatch[1]; // GREATEST or LEAST
+                    const index = parseInt(placeholderMatch[2]);
+
+                    // Find the corresponding original function call
+                    const originalFunction = statement.greatest_least_functions.find(
+                        (f: any, i: number) => i === index && f.functionName === functionType,
+                    );
+
+                    if (originalFunction) {
+                        // Return the original function call with proper uppercase function name
+                        const original = originalFunction.original;
+                        const upperCaseFunctionName = functionType.toUpperCase();
+                        // Replace the function name with uppercase version
+                        const formattedOriginal = original.replace(/^(greatest|least)/i, upperCaseFunctionName);
+                        return formattedOriginal;
+                    }
+                }
+            }
+        }
+    }
+
     // Handle window functions with OVER clause
     if (func.over) {
         // Check for arguments

@@ -522,4 +522,25 @@ WHERE status = 'active'
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Greatest and least with casts", async () => {
+        const unformatted = `SELECT id, name, greatest(COALESCE(created_at, '1900-01-01')::DATE, updated_at::DATE) AS last_activity, least(COALESCE(created_at, '1900-01-01')::DATE, updated_at::DATE) AS first_activity
+        , greatest_ignore_nulls(created_at, updated_at) AS last_activity_ignore_nulls
+        , least_ignore_nulls(created_at, updated_at) AS first_activity_ignore_nulls
+FROM users
+WHERE status = 'active';`;
+
+        const expected = `SELECT id
+     , name
+     , GREATEST(COALESCE(created_at, '1900-01-01')::DATE, updated_at::DATE) AS last_activity
+     , LEAST(COALESCE(created_at, '1900-01-01')::DATE, updated_at::DATE) AS first_activity
+     , GREATEST_IGNORE_NULLS(created_at, updated_at) AS last_activity_ignore_nulls
+     , LEAST_IGNORE_NULLS(created_at, updated_at) AS first_activity_ignore_nulls
+FROM users
+WHERE status = 'active'
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
