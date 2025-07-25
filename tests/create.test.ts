@@ -14,10 +14,10 @@ describe("CREATE", () => {
         const unformatted = `CREATE TABLE users (id INT PRIMARY KEY comment 'User ID', name VARCHAR(100) not null, email VARCHAR(100), status VARCHAR(20), last_updated datetime default current_timestamp());`;
 
         const expected = `CREATE TABLE users (
-      id INT PRIMARY KEY COMMENT 'User ID'
-    , name VARCHAR(100) NOT NULL
-    , email VARCHAR(100)
-    , status VARCHAR(20)
+      id           INT PRIMARY KEY COMMENT 'User ID'
+    , name         VARCHAR(100) NOT NULL
+    , email        VARCHAR(100)
+    , status       VARCHAR(20)
     , last_updated DATETIME DEFAULT CURRENT_TIMESTAMP()
 )
 ;`;
@@ -30,10 +30,10 @@ describe("CREATE", () => {
         const unformatted = `CREATE TABLE orders (id INT PRIMARY KEY, user_id int REFERENCES users(id), order_date DATETIME, total DECIMAL(10,2));`;
 
         const expected = `CREATE TABLE orders (
-      id INT PRIMARY KEY
-    , user_id INT REFERENCES users(id)
+      id         INT PRIMARY KEY
+    , user_id    INT REFERENCES users(id)
     , order_date DATETIME
-    , total DECIMAL(10,2)
+    , total      DECIMAL(10,2)
 )
 ;`;
 
@@ -44,10 +44,10 @@ describe("CREATE", () => {
     test("formats a create or replace statement", async () => {
         const unformatted = `CREATE OR REPLACE TABLE orders (id INT PRIMARY KEY, user_id INT REFERENCES users(id), order_date DATETIME, total DECIMAL(10,2));`;
         const expected = `CREATE OR REPLACE TABLE orders (
-      id INT PRIMARY KEY
-    , user_id INT REFERENCES users(id)
+      id         INT PRIMARY KEY
+    , user_id    INT REFERENCES users(id)
     , order_date DATETIME
-    , total DECIMAL(10,2)
+    , total      DECIMAL(10,2)
 )
 ;`;
 
@@ -189,7 +189,7 @@ ORDER BY t.arena_id
     test("OBJECT and ARRAY types", async () => {
         const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, data OBJECT, tags ARRAY);`;
         const expected = `CREATE TABLE my_table (
-      id INT PRIMARY KEY
+      id   INT PRIMARY KEY
     , data OBJECT
     , tags ARRAY
 )
@@ -202,9 +202,9 @@ ORDER BY t.arena_id
     test("More custom types", async () => {
         const unformatted = `CREATE TABLE my_table (id REAL, metadata JSON, settings STRING, another_one VARIANT);`;
         const expected = `CREATE TABLE my_table (
-      id REAL
-    , metadata JSON
-    , settings STRING
+      id          REAL
+    , metadata    JSON
+    , settings    STRING
     , another_one VARIANT
 )
 ;`;
@@ -216,8 +216,8 @@ ORDER BY t.arena_id
     test("Default booleans", async () => {
         const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, is_active BOOLEAN DEFAULT TRUE, is_verified BOOLEAN DEFAULT FALSE);`;
         const expected = `CREATE TABLE my_table (
-      id INT PRIMARY KEY
-    , is_active BOOLEAN DEFAULT TRUE
+      id          INT PRIMARY KEY
+    , is_active   BOOLEAN DEFAULT TRUE
     , is_verified BOOLEAN DEFAULT FALSE
 )
 ;`;
@@ -229,7 +229,7 @@ ORDER BY t.arena_id
     test("Inline comments", async () => {
         const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100) -- full name);`;
         const expected = `CREATE TABLE my_table (
-      id INT PRIMARY KEY
+      id   INT PRIMARY KEY
     , name VARCHAR(100) -- full name
 )
 ;`;
@@ -241,7 +241,7 @@ ORDER BY t.arena_id
     test("Comment on table", async () => {
         const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100)) COMMENT 'This is a sample table';`;
         const expected = `CREATE TABLE my_table (
-      id INT PRIMARY KEY
+      id   INT PRIMARY KEY
     , name VARCHAR(100)
 )
 COMMENT 'This is a sample table'

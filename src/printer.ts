@@ -206,20 +206,30 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             }
         }
 
-        // Add column definitions
+        // Add column definitions with aligned types
         if (ast.create_definitions && ast.create_definitions.length > 0) {
             parts.push(" (");
 
-            // Create column definitions with proper indentation
+            // First pass: find maximum column name length for alignment
+            let maxColumnNameLength = 0;
+            ast.create_definitions.forEach((def: any) => {
+                if (def.column && def.column.column) {
+                    maxColumnNameLength = Math.max(maxColumnNameLength, def.column.column.length);
+                }
+            });
+
+            // Create column definitions with proper indentation and alignment
             const columnDefs: doc.builders.DocCommand[] = [];
 
             ast.create_definitions.forEach((def: any, index: number) => {
                 columnDefs.push(hardline);
                 columnDefs.push(index > 0 ? ", " : "  ");
 
-                // Column name
+                // Column name with padding for alignment
                 if (def.column && def.column.column) {
-                    columnDefs.push(def.column.column);
+                    const columnName = def.column.column;
+                    const padding = " ".repeat(maxColumnNameLength - columnName.length);
+                    columnDefs.push(columnName + padding);
                 }
 
                 // Data type

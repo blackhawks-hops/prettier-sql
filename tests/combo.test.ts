@@ -81,24 +81,24 @@ GRANT SELECT ON FUTURE VIEWS IN SCHEMA ahl TO ROLE READERS;
 
 CREATE OR REPLACE TABLE ahl.contract (
       team_id_hawks INT NOT NULL
-    , team_name VARCHAR(100)
-    , contract VARCHAR(10)
-    , last_name VARCHAR(50)
-    , first_name VARCHAR(50)
-    , dob DATE
-    , hash VARCHAR(32)
-    , last_updated DATETIME DEFAULT CURRENT_TIMESTAMP()
+    , team_name     VARCHAR(100)
+    , contract      VARCHAR(10)
+    , last_name     VARCHAR(50)
+    , first_name    VARCHAR(50)
+    , dob           DATE
+    , hash          VARCHAR(32)
+    , last_updated  DATETIME DEFAULT CURRENT_TIMESTAMP()
 )
 ;
 
 CREATE OR REPLACE TABLE ahl.contract_manual (
-      team_id_hawks INT NOT NULL
-    , team_name VARCHAR(100)
-    , contract VARCHAR(10)
-    , last_name VARCHAR(50)
-    , first_name VARCHAR(50)
+      team_id_hawks   INT NOT NULL
+    , team_name       VARCHAR(100)
+    , contract        VARCHAR(10)
+    , last_name       VARCHAR(50)
+    , first_name      VARCHAR(50)
     , player_id_hawks INT
-    , last_updated DATETIME DEFAULT CURRENT_TIMESTAMP()
+    , last_updated    DATETIME DEFAULT CURRENT_TIMESTAMP()
 )
 ;
 `;
