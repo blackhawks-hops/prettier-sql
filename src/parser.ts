@@ -282,9 +282,10 @@ export class SQLParser {
         let processedText = sql;
         const greatestLeastFunctions: Array<{ original: string; placeholder: string; functionName: string }> = [];
 
-        // Find GREATEST and LEAST function calls with their full argument lists
+        // Find GREATEST and LEAST function calls with their full argument lists (including _ignore_nulls variants)
         // This regex captures the function name and its complete argument list including nested parentheses
-        const functionCallRegex = /\b(GREATEST|LEAST)\s*(\([^()]*(?:\([^()]*\)[^()]*)*\))/gi;
+        const functionCallRegex =
+            /\b(GREATEST(?:_IGNORE_NULLS)?|LEAST(?:_IGNORE_NULLS)?)\s*(\([^()]*(?:\([^()]*\)[^()]*)*\))/gi;
         let match;
 
         while ((match = functionCallRegex.exec(sql)) !== null) {

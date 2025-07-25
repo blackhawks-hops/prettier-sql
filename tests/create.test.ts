@@ -239,12 +239,12 @@ ORDER BY t.arena_id
     });
 
     test("Comment on table", async () => {
-        const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100)) COMMENT 'This is a sample table';`;
+        const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100)) COMMENT = 'This is a sample table';`;
         const expected = `CREATE TABLE my_table (
       id   INT PRIMARY KEY
     , name VARCHAR(100)
 )
-COMMENT 'This is a sample table'
+COMMENT = 'This is a sample table'
 ;`;
 
         const formatted = await prettier.format(unformatted, options);

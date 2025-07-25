@@ -430,7 +430,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             ast.table_options.forEach((option: any) => {
                 if (option.keyword === "comment") {
                     parts.push(hardline);
-                    parts.push("COMMENT ");
+                    parts.push("COMMENT = ");
                     // The value already includes quotes, so use it directly
                     parts.push(option.value);
                 }
@@ -832,10 +832,10 @@ function formatFunction(func: any, statement?: any): string {
             const firstArg = func.args.value[0];
             if (firstArg && firstArg.type === "column_ref" && firstArg.column) {
                 const argValue = firstArg.column;
-                // Look for our placeholder pattern: __GREATEST_N__ or __LEAST_N__
-                const placeholderMatch = argValue.match(/^__([A-Z]+)_(\d+)__$/);
+                // Look for our placeholder pattern: __GREATEST_N__, __LEAST_N__, __GREATEST_IGNORE_NULLS_N__, etc.
+                const placeholderMatch = argValue.match(/^__([A-Z_]+)_(\d+)__$/);
                 if (placeholderMatch) {
-                    const functionType = placeholderMatch[1]; // GREATEST or LEAST
+                    const functionType = placeholderMatch[1]; // GREATEST, LEAST, GREATEST_IGNORE_NULLS, LEAST_IGNORE_NULLS
                     const index = parseInt(placeholderMatch[2]);
 
                     // Find the corresponding original function call
@@ -847,8 +847,11 @@ function formatFunction(func: any, statement?: any): string {
                         // Return the original function call with proper uppercase function name
                         const original = originalFunction.original;
                         const upperCaseFunctionName = functionType.toUpperCase();
-                        // Replace the function name with uppercase version
-                        const formattedOriginal = original.replace(/^(greatest|least)/i, upperCaseFunctionName);
+                        // Replace the function name with uppercase version (including _ignore_nulls variants)
+                        const formattedOriginal = original.replace(
+                            /^(greatest(?:_ignore_nulls)?|least(?:_ignore_nulls)?)/i,
+                            upperCaseFunctionName,
+                        );
                         return formattedOriginal;
                     }
                 }
