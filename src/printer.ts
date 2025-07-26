@@ -221,6 +221,15 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             const columnDefs: doc.builders.DocCommand[] = [];
 
             columnDefinitions.forEach((def: any, index: number) => {
+                // Handle leading comments (comments before this column)
+                if (def.leadingComments && def.leadingComments.length > 0) {
+                    def.leadingComments.forEach((comment: string) => {
+                        columnDefs.push(hardline);
+                        columnDefs.push("-- ");
+                        columnDefs.push(comment);
+                    });
+                }
+
                 columnDefs.push(hardline);
                 columnDefs.push(index > 0 ? ", " : "  ");
 

@@ -468,7 +468,7 @@ export class SQLParser {
             
             // Handle CREATE TABLE statements
             else if (statement.type === 'create' && statement.keyword === 'table' && statement.create_definitions) {
-                statement.create_definitions = statement.create_definitions.map((def: any) => {
+                statement.create_definitions = statement.create_definitions.map((def: any, defIndex: number) => {
                     const enhanced = { ...def };
 
                     // Find trailing comments for this column definition
@@ -482,6 +482,23 @@ export class SQLParser {
 
                         if (trailingComment) {
                             enhanced.trailingComment = trailingComment.comment;
+                        }
+
+                        // Handle leading comments (standalone comments before this column)
+                        if (defIndex > 0) {
+                            const prevDef = statement.create_definitions[defIndex - 1];
+                            const prevColumnLine = this.findColumnLineInSQL(lines, prevDef.column?.column);
+                            const thisColumnLine = this.findColumnLineInSQL(lines, def.column.column);
+
+                            const leadingComments = commentInfo.filter(info => 
+                                info.type === 'standalone' && 
+                                info.lineIndex > prevColumnLine && 
+                                info.lineIndex < thisColumnLine
+                            );
+
+                            if (leadingComments.length > 0) {
+                                enhanced.leadingComments = leadingComments.map(c => c.comment);
+                            }
                         }
                     }
 
