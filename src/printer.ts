@@ -619,7 +619,16 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(hardline);
         parts.push(";");
     }
-    return join("", parts);
+    
+    // Clean up any remaining unresolved placeholders from string parts
+    const cleanedParts = parts.map(part => {
+        if (typeof part === 'string') {
+            return part.replace(/\/\* (?:INLINE_COMMENT_PLACEHOLDER|STANDALONE_COMMENT_PLACEHOLDER)_\d+ \*\//g, '');
+        }
+        return part;
+    });
+    
+    return join("", cleanedParts);
 }
 
 /**
@@ -774,6 +783,8 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
                 formattedColumn = "*";
             } else if (column.expr.type === "number") {
                 formattedColumn = column.expr.value.toString();
+            } else if (column.expr.type === "binary_expr") {
+                formattedColumn = formatBinaryExpression(column.expr, statement);
             } else {
                 formattedColumn = String(column.expr.value || "");
             }
@@ -784,6 +795,9 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
             }
         }
 
+        // Restore inline comments for this column
+        formattedColumn = restoreInlineComments(formattedColumn, statement);
+        
         if (index === 0) {
             // First column directly after SELECT
             parts.push(" ");
@@ -1139,7 +1153,12 @@ function formatJoin(joinDefinition: any): doc.builders.DocCommand {
             parts.push(joinItem.as);
         }
     } else if (joinItem.table) {
-        parts.push(joinItem.table);
+        // Include database/schema prefix if provided
+        if (joinItem.db) {
+            parts.push(`${joinItem.db}.${joinItem.table}`);
+        } else {
+            parts.push(joinItem.table);
+        }
 
         if (joinItem.as) {
             parts.push(" ");
@@ -1265,6 +1284,9 @@ function formatWhere(where: any, statement?: any): doc.builders.DocCommand {
         const operator = where.operator?.toUpperCase() || "";
         const expr = formatExpressionValue(where.expr, statement);
         parts.push(`${operator} ${expr}`);
+    } else if (where.type === "column_ref") {
+        parts.push(" ");
+        parts.push(formatColumnRef(where));
     } else {
         parts.push(" ");
         parts.push(where.value || "");

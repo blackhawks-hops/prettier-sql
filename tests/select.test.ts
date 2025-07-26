@@ -558,7 +558,7 @@ WHERE NOT active
         expect(formatted.trim()).toBe(expected);
     });
 
-    test.skip("interspersed comments", async () => {
+    test("interspersed comments", async () => {
         const unformatted = `
       SELECT id -- comment on a line
            -- comment between lines
@@ -568,10 +568,28 @@ WHERE NOT active
     `;
 
         const expected = `SELECT id -- comment on a line
-     -- comment between lines
      , name
      , email
 FROM users
+
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("Boolean column", async () => {
+        const unformatted = `
+      SELECT u.id, COALESCE(u.salary, 0) > 0 AND COALESCE(o.salary, 0) > 0 AS is_two_way
+      FROM public.users u
+      left join public.org o on u.id=o.user_id
+      WHERE u.is_active;
+    `;
+
+        const expected = `SELECT u.id
+     , COALESCE(u.salary, 0) > 0 AND COALESCE(o.salary, 0) > 0 AS is_two_way
+FROM public.users u
+LEFT JOIN public.org o ON u.id = o.user_id
+WHERE u.is_active
 ;`;
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);

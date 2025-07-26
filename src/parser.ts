@@ -208,7 +208,7 @@ export class SQLParser {
         if (createOrReplaceMatch) {
             processedText = processedText.replace(
                 createOrReplaceMatch[0],
-                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `,
+                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `
             );
         }
 
@@ -367,7 +367,7 @@ export class SQLParser {
      */
     static postprocessArrayIndexSyntax(
         ast: any,
-        arrayAccesses: Array<{ original: string; placeholder: string; index: string }>,
+        arrayAccesses: Array<{ original: string; placeholder: string; index: string }>
     ): any {
         if (!ast || arrayAccesses.length === 0) {
             return ast;
@@ -391,7 +391,7 @@ export class SQLParser {
      */
     static postprocessInlineComments(
         ast: any,
-        inlineComments: Array<{ original: string; placeholder: string; comment: string }>,
+        inlineComments: Array<{ original: string; placeholder: string; comment: string }>
     ): any {
         if (!ast || inlineComments.length === 0) {
             return ast;
@@ -415,7 +415,7 @@ export class SQLParser {
      */
     static postprocessBlockComments(
         ast: any,
-        blockComments: Array<{ original: string; placeholder: string; comment: string }>,
+        blockComments: Array<{ original: string; placeholder: string; comment: string }>
     ): any {
         if (!ast || blockComments.length === 0) {
             return ast;
@@ -439,7 +439,7 @@ export class SQLParser {
      */
     static postprocessCustomTypes(
         ast: any,
-        customTypes: Array<{ original: string; placeholder: string; type: string }>,
+        customTypes: Array<{ original: string; placeholder: string; type: string }>
     ): any {
         if (!ast || customTypes.length === 0) {
             return ast;
@@ -515,7 +515,7 @@ export class SQLParser {
      */
     static postprocessGreatestLeast(
         ast: any,
-        greatestLeastFunctions: Array<{ original: string; placeholder: string; functionName: string }>,
+        greatestLeastFunctions: Array<{ original: string; placeholder: string; functionName: string }>
     ): any {
         if (!ast || greatestLeastFunctions.length === 0) {
             return ast;
