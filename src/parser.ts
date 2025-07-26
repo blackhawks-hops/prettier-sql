@@ -208,7 +208,7 @@ export class SQLParser {
         if (createOrReplaceMatch) {
             processedText = processedText.replace(
                 createOrReplaceMatch[0],
-                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `
+                `CREATE ${createOrReplaceMatch[1].toUpperCase()} `,
             );
         }
 
@@ -291,7 +291,6 @@ export class SQLParser {
         while ((match = functionCallRegex.exec(sql)) !== null) {
             const functionName = match[1].toUpperCase();
             const fullCall = match[0]; // e.g., "GREATEST(col1::DATE, col2::DATE)"
-            const args = match[2]; // e.g., "(col1::DATE, col2::DATE)"
 
             // Create a unique placeholder using COALESCE which is supported by node-sql-parser
             // We'll use a pattern that won't conflict with real SQL: __GREATEST_N__ or __LEAST_N__
@@ -367,7 +366,7 @@ export class SQLParser {
      */
     static postprocessArrayIndexSyntax(
         ast: any,
-        arrayAccesses: Array<{ original: string; placeholder: string; index: string }>
+        arrayAccesses: Array<{ original: string; placeholder: string; index: string }>,
     ): any {
         if (!ast || arrayAccesses.length === 0) {
             return ast;
@@ -395,10 +394,10 @@ export class SQLParser {
             return ast;
         }
 
-        const lines = originalSQL.split('\n');
+        const lines = originalSQL.split("\n");
         const commentInfo: Array<{
             lineIndex: number;
-            type: 'inline' | 'standalone';
+            type: "inline" | "standalone";
             sqlContent?: string;
             comment: string;
         }> = [];
@@ -413,15 +412,15 @@ export class SQLParser {
             if (standaloneMatch) {
                 commentInfo.push({
                     lineIndex,
-                    type: 'standalone',
-                    comment: standaloneMatch[1].trim()
+                    type: "standalone",
+                    comment: standaloneMatch[1].trim(),
                 });
             } else if (inlineMatch) {
                 commentInfo.push({
                     lineIndex,
-                    type: 'inline',
+                    type: "inline",
                     sqlContent: inlineMatch[1].trim(),
-                    comment: inlineMatch[2].trim()
+                    comment: inlineMatch[2].trim(),
                 });
             }
         });
@@ -429,16 +428,17 @@ export class SQLParser {
         // Process statements to attach comments
         const processStatement = (statement: any) => {
             // Handle SELECT statements
-            if (statement.type === 'select' && statement.columns) {
+            if (statement.type === "select" && statement.columns) {
                 statement.columns = statement.columns.map((column: any, columnIndex: number) => {
                     const enhanced = { ...column };
 
                     // Find trailing comments (inline comments after this column)
-                    const trailingComment = commentInfo.find(info => 
-                        info.type === 'inline' && 
-                        info.sqlContent && 
-                        column.expr?.column && 
-                        info.sqlContent.includes(column.expr.column)
+                    const trailingComment = commentInfo.find(
+                        (info) =>
+                            info.type === "inline" &&
+                            info.sqlContent &&
+                            column.expr?.column &&
+                            info.sqlContent.includes(column.expr.column),
                     );
 
                     if (trailingComment) {
@@ -451,33 +451,35 @@ export class SQLParser {
                         const prevColumnLine = this.findColumnLineInSQL(lines, prevColumn.expr?.column);
                         const thisColumnLine = this.findColumnLineInSQL(lines, column.expr?.column);
 
-                        const leadingComments = commentInfo.filter(info => 
-                            info.type === 'standalone' && 
-                            info.lineIndex > prevColumnLine && 
-                            info.lineIndex < thisColumnLine
+                        const leadingComments = commentInfo.filter(
+                            (info) =>
+                                info.type === "standalone" &&
+                                info.lineIndex > prevColumnLine &&
+                                info.lineIndex < thisColumnLine,
                         );
 
                         if (leadingComments.length > 0) {
-                            enhanced.leadingComments = leadingComments.map(c => c.comment);
+                            enhanced.leadingComments = leadingComments.map((c) => c.comment);
                         }
                     }
 
                     return enhanced;
                 });
             }
-            
+
             // Handle CREATE TABLE statements
-            else if (statement.type === 'create' && statement.keyword === 'table' && statement.create_definitions) {
+            else if (statement.type === "create" && statement.keyword === "table" && statement.create_definitions) {
                 statement.create_definitions = statement.create_definitions.map((def: any, defIndex: number) => {
                     const enhanced = { ...def };
 
                     // Find trailing comments for this column definition
                     if (def.column?.column) {
-                        const trailingComment = commentInfo.find(info => 
-                            info.type === 'inline' && 
-                            info.sqlContent && 
-                            // More precise matching: column name should be followed by whitespace or data type
-                            info.sqlContent.match(new RegExp(`\\b${def.column.column}\\s+\\w+.*`))
+                        const trailingComment = commentInfo.find(
+                            (info) =>
+                                info.type === "inline" &&
+                                info.sqlContent &&
+                                // More precise matching: column name should be followed by whitespace or data type
+                                info.sqlContent.match(new RegExp(`\\b${def.column.column}\\s+\\w+.*`)),
                         );
 
                         if (trailingComment) {
@@ -490,14 +492,15 @@ export class SQLParser {
                             const prevColumnLine = this.findColumnLineInSQL(lines, prevDef.column?.column);
                             const thisColumnLine = this.findColumnLineInSQL(lines, def.column.column);
 
-                            const leadingComments = commentInfo.filter(info => 
-                                info.type === 'standalone' && 
-                                info.lineIndex > prevColumnLine && 
-                                info.lineIndex < thisColumnLine
+                            const leadingComments = commentInfo.filter(
+                                (info) =>
+                                    info.type === "standalone" &&
+                                    info.lineIndex > prevColumnLine &&
+                                    info.lineIndex < thisColumnLine,
                             );
 
                             if (leadingComments.length > 0) {
-                                enhanced.leadingComments = leadingComments.map(c => c.comment);
+                                enhanced.leadingComments = leadingComments.map((c) => c.comment);
                             }
                         }
                     }
@@ -520,20 +523,23 @@ export class SQLParser {
     /**
      * Attach preprocessed comments to AST nodes (for CREATE statements that needed preprocessing)
      */
-    static attachPreprocessedCommentsToNodes(ast: any, inlineComments: Array<{ original: string; placeholder: string; comment: string }>): any {
+    static attachPreprocessedCommentsToNodes(
+        ast: any,
+        inlineComments: Array<{ original: string; placeholder: string; comment: string }>,
+    ): any {
         if (!ast || inlineComments.length === 0) {
             return ast;
         }
 
         // Process CREATE TABLE statements
         const processStatement = (statement: any) => {
-            if (statement.type === 'create' && statement.keyword === 'table' && statement.create_definitions) {
+            if (statement.type === "create" && statement.keyword === "table" && statement.create_definitions) {
                 statement.create_definitions = statement.create_definitions.map((def: any) => {
                     const enhanced = { ...def };
 
                     // Find comment for this column by checking if the original comment contains this column
                     if (def.column?.column) {
-                        const relevantComment = inlineComments.find(commentInfo => {
+                        const relevantComment = inlineComments.find((commentInfo) => {
                             // Check the original text (before preprocessing) to see if it contains this column definition
                             return commentInfo.original.includes(def.column.column);
                         });
@@ -563,11 +569,8 @@ export class SQLParser {
      */
     static findColumnLineInSQL(lines: string[], columnName: string | undefined): number {
         if (!columnName) return -1;
-        
-        return lines.findIndex(line => 
-            line.includes(columnName) && 
-            !line.trim().startsWith('--')
-        );
+
+        return lines.findIndex((line) => line.includes(columnName) && !line.trim().startsWith("--"));
     }
 
     /**
@@ -575,7 +578,7 @@ export class SQLParser {
      */
     static postprocessInlineComments(
         ast: any,
-        inlineComments: Array<{ original: string; placeholder: string; comment: string }>
+        inlineComments: Array<{ original: string; placeholder: string; comment: string }>,
     ): any {
         if (!ast || inlineComments.length === 0) {
             return ast;
@@ -599,7 +602,7 @@ export class SQLParser {
      */
     static postprocessBlockComments(
         ast: any,
-        blockComments: Array<{ original: string; placeholder: string; comment: string }>
+        blockComments: Array<{ original: string; placeholder: string; comment: string }>,
     ): any {
         if (!ast || blockComments.length === 0) {
             return ast;
@@ -623,7 +626,7 @@ export class SQLParser {
      */
     static postprocessCustomTypes(
         ast: any,
-        customTypes: Array<{ original: string; placeholder: string; type: string }>
+        customTypes: Array<{ original: string; placeholder: string; type: string }>,
     ): any {
         if (!ast || customTypes.length === 0) {
             return ast;
@@ -699,7 +702,7 @@ export class SQLParser {
      */
     static postprocessGreatestLeast(
         ast: any,
-        greatestLeastFunctions: Array<{ original: string; placeholder: string; functionName: string }>
+        greatestLeastFunctions: Array<{ original: string; placeholder: string; functionName: string }>,
     ): any {
         if (!ast || greatestLeastFunctions.length === 0) {
             return ast;
@@ -774,7 +777,7 @@ export class SQLParser {
                         // Preprocess inline comments ONLY for CREATE statements (node-sql-parser needs this)
                         let textAfterInlineComments = textAfterGreatestLeast;
                         let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
-                        if (sqlOnly.trim().toUpperCase().startsWith('CREATE')) {
+                        if (sqlOnly.trim().toUpperCase().startsWith("CREATE")) {
                             const preprocessResult = this.preprocessInlineComments(textAfterGreatestLeast);
                             textAfterInlineComments = preprocessResult.processedText;
                             inlineComments = preprocessResult.inlineComments;
@@ -872,7 +875,7 @@ export class SQLParser {
         // Preprocess inline comments ONLY for CREATE statements (node-sql-parser needs this)
         let textAfterInlineComments = textAfterGreatestLeast;
         let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
-        if (cleanText.trim().toUpperCase().startsWith('CREATE')) {
+        if (cleanText.trim().toUpperCase().startsWith("CREATE")) {
             const preprocessResult = this.preprocessInlineComments(textAfterGreatestLeast);
             textAfterInlineComments = preprocessResult.processedText;
             inlineComments = preprocessResult.inlineComments;

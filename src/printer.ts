@@ -258,13 +258,13 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                     // Check for attached trailing comment on this column definition
                     if (def.trailingComment) {
                         // Check if comment already starts with -- to avoid duplication
-                        if (def.trailingComment.startsWith('--')) {
+                        if (def.trailingComment.startsWith("--")) {
                             completeDataType += ` ${def.trailingComment}`;
                         } else {
                             completeDataType += ` -- ${def.trailingComment}`;
                         }
                     }
-                    
+
                     columnDefs.push(completeDataType);
 
                     // Handle primary key constraint
@@ -616,7 +616,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(hardline);
         parts.push(";");
     }
-    
+
     return join("", parts);
 }
 
