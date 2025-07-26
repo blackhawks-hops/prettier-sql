@@ -322,26 +322,44 @@ primary key (SEASON, LEAGUE_ID_HAWKS, MANPOWER_CODE, ZONE, AREA_NAME, IS_RUSH)
         const unformatted = `CREATE OR REPLACE TABLE public.player (
         id VARCHAR(24)
       , name VARCHAR(30)
+      , foo1 int
+      , foo2 int
+      , foo3 int
       -- SKATER
       , skating FLOAT
       , skill FLOAT
+      , foo4 int
+      , foo5 int
       -- GOALIE
       , footwork FLOAT
       , pace FLOAT
+      , foo6 int
+      , foo7 int
       --
       , created DATETIME
+      , foo8 int
+      , foo9 int
 );`;
         const expected = `CREATE OR REPLACE TABLE public.player (
       id       VARCHAR(24)
     , name     VARCHAR(30)
+    , foo1     INT
+    , foo2     INT
+    , foo3     INT
     -- SKATER
     , skating  FLOAT
     , skill    FLOAT
+    , foo4     INT
+    , foo5     INT
     -- GOALIE
     , footwork FLOAT
     , pace     FLOAT
+    , foo6     INT
+    , foo7     INT
     --
     , created  DATETIME
+    , foo8     INT
+    , foo9     INT
 )
 ;`;
 
