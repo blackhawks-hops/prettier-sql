@@ -1259,6 +1259,12 @@ function formatWhere(where: any, statement?: any): doc.builders.DocCommand {
             parts.push(hardline);
             parts.push(")");
         }
+    } else if (where.type === "unary_expr") {
+        // Handle unary expressions like NOT, +, -, etc.
+        parts.push(" ");
+        const operator = where.operator?.toUpperCase() || "";
+        const expr = formatExpressionValue(where.expr, statement);
+        parts.push(`${operator} ${expr}`);
     } else {
         parts.push(" ");
         parts.push(where.value || "");

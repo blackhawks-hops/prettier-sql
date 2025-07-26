@@ -543,4 +543,37 @@ WHERE status = 'active'
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Where not", async () => {
+        const unformatted = `select id, name, email from users where not active;`;
+
+        const expected = `SELECT id
+     , name
+     , email
+FROM users
+WHERE NOT active
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test.skip("interspersed comments", async () => {
+        const unformatted = `
+      SELECT id -- comment on a line
+           -- comment between lines
+           , name, email
+      FROM users
+      ;
+    `;
+
+        const expected = `SELECT id -- comment on a line
+     -- comment between lines
+     , name
+     , email
+FROM users
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
