@@ -595,4 +595,17 @@ WHERE u.is_active
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Qualify statement", async () => {
+        const unformatted = `select player_id_hawks, ufa_season
+from public.contract
+qualify row_number() over (partition by player_id_hawks order by sign_date desc) = 1;`;
+        const expected = `SELECT player_id_hawks
+     , ufa_season
+FROM public.contract
+QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id_hawks ORDER BY sign_date DESC) = 1
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

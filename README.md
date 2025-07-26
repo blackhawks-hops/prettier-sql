@@ -93,3 +93,16 @@ WHERE cte1.column2 = 'value4'
   AND cte2.column5 = 'value5'
 ;
 ```
+
+## Development
+
+### Quick Testing with Sandbox
+
+For quick iteration during development, you can use the sandbox environment:
+
+1. **Edit `sandbox.sql`** with any SQL you want to test
+2. **Build the plugin**: `npm run build`
+3. **Format and view**: `npm run sandbox` - shows before/after formatting in the console
+4. **Format and overwrite**: `npm run sandbox:write` - updates the sandbox.sql file with formatted version
+
+The sandbox provides a quick way to test SQL formatting without creating test files or running the full test suite.

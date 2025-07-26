@@ -25,7 +25,9 @@
         "lint": "eslint . --ext .ts",
         "typecheck": "tsc --noEmit",
         "prepublishOnly": "npm run build",
-        "dev": "vite build --watch"
+        "dev": "vite build --watch",
+        "sandbox": "node scripts/format-sandbox.js",
+        "sandbox:write": "node scripts/format-sandbox.js --write"
     },
     "publishConfig": {
         "access": "public"

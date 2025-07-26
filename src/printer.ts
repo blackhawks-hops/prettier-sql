@@ -553,6 +553,21 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(`GROUP BY ${ast.groupby.columns.map((item: any) => item.value || item.column || "").join(", ")}`);
     }
 
+    // Format QUALIFY clause
+    if (ast.qualify) {
+        parts.push(hardline);
+        parts.push("QUALIFY ");
+        // Format the QUALIFY expression - handle common patterns
+        const qualifyText = typeof ast.qualify === 'string' ? ast.qualify : String(ast.qualify);
+        let formattedQualify = qualifyText
+            .replace(/\brow_number\(\)/gi, 'ROW_NUMBER()')
+            .replace(/\bover\s*\(/gi, 'OVER (')
+            .replace(/\bpartition\s+by\b/gi, 'PARTITION BY')
+            .replace(/\border\s+by\b/gi, 'ORDER BY')
+            .replace(/\b(asc|desc)\b/gi, (match: string) => match.toUpperCase());
+        parts.push(formattedQualify);
+    }
+
     // Format ORDER BY clause
     if (ast.orderby && Array.isArray(ast.orderby) && ast.orderby.length > 0) {
         parts.push(hardline);

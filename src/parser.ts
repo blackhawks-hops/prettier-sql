@@ -195,6 +195,69 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for QUALIFY clause (Snowflake/BigQuery extension)
+     * QUALIFY is like WHERE but for window functions - not supported by node-sql-parser
+     */
+    static preprocessQualify(sql: string): {
+        processedText: string;
+        qualifyClause: string | null;
+    } {
+        let processedText = sql;
+        let qualifyClause = null;
+
+        // Match QUALIFY clause - need to handle nested parentheses properly
+        // Look for QUALIFY followed by content until we hit ORDER BY/LIMIT/UNION that's not inside parentheses
+        const qualifyMatch = sql.match(/\bQUALIFY\s+/i);
+        if (!qualifyMatch) {
+            return { processedText, qualifyClause };
+        }
+
+        const qualifyStart = qualifyMatch.index! + qualifyMatch[0].length;
+        let currentPos = qualifyStart;
+        let depth = 0;
+        let qualifyEnd = -1;
+
+        // Scan character by character to find the end of the QUALIFY clause
+        while (currentPos < sql.length) {
+            const char = sql[currentPos];
+            const remaining = sql.substring(currentPos);
+
+            if (char === '(') {
+                depth++;
+            } else if (char === ')') {
+                depth--;
+            } else if (depth === 0) {
+                // Only check for keywords when we're not inside parentheses
+                if (remaining.match(/^\s*(?:ORDER\s+BY|LIMIT|UNION|;|$)/i)) {
+                    qualifyEnd = currentPos;
+                    break;
+                }
+            }
+            currentPos++;
+        }
+
+        if (qualifyEnd === -1) {
+            qualifyEnd = sql.length;
+        }
+
+        const match = {
+            0: sql.substring(qualifyMatch.index!, qualifyEnd),
+            1: sql.substring(qualifyStart, qualifyEnd).trim(),
+            index: qualifyMatch.index
+        };
+
+        if (match) {
+            qualifyClause = match[1].trim();
+            // Remove the QUALIFY clause from the SQL to make it parseable
+            processedText = processedText.replace(match[0], '');
+            // Clean up any extra whitespace
+            processedText = processedText.replace(/\s+/g, ' ').trim();
+        }
+
+        return { processedText, qualifyClause };
+    }
+
+    /**
      * Preprocess SQL for "CREATE OR REPLACE TABLE/VIEW" Snowflake dialect
      * Returns an object with the processed text and the match result for post-processing
      */
@@ -308,6 +371,30 @@ export class SQLParser {
         }
 
         return { processedText, greatestLeastFunctions };
+    }
+
+    /**
+     * Apply post-processing for QUALIFY clause
+     */
+    static postprocessQualify(ast: any, qualifyClause: string | null): any {
+        if (!ast || !qualifyClause) {
+            return ast;
+        }
+
+        // Handle both single statement and array of statements
+        const processStatement = (stmt: any) => {
+            if (stmt.type === "select") {
+                stmt.qualify = qualifyClause;
+            }
+        };
+
+        if (Array.isArray(ast)) {
+            ast.forEach(processStatement);
+        } else {
+            processStatement(ast);
+        }
+
+        return ast;
     }
 
     /**
@@ -758,9 +845,12 @@ export class SQLParser {
                         // Handle GRANT statement
                         parsedStatements.push(this.parseGrantStatement(sqlOnly));
                     } else {
+                        // Preprocess QUALIFY clause
+                        const { processedText: textAfterQualify, qualifyClause } = this.preprocessQualify(sqlOnly);
+
                         // Preprocess CREATE OR REPLACE syntax
                         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
-                            this.preprocessCreateOrReplace(sqlOnly);
+                            this.preprocessCreateOrReplace(textAfterQualify);
 
                         // Preprocess DELETE with USING clause
                         const { processedText: textAfterDeleteUsing, usingClause } =
@@ -796,6 +886,9 @@ export class SQLParser {
 
                         // Apply post-processing for CREATE OR REPLACE
                         let processedAst = this.postprocessCreateOrReplace(stmtAst, createOrReplaceMatch);
+
+                        // Apply post-processing for QUALIFY clause
+                        processedAst = this.postprocessQualify(processedAst, qualifyClause);
 
                         // Apply post-processing for DELETE with USING
                         processedAst = this.postprocessDeleteUsing(processedAst, usingClause);
@@ -857,9 +950,12 @@ export class SQLParser {
             };
         }
 
+        // Preprocess QUALIFY clause
+        const { processedText: textAfterQualify, qualifyClause } = this.preprocessQualify(cleanText);
+
         // Preprocess CREATE OR REPLACE syntax
         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
-            this.preprocessCreateOrReplace(cleanText);
+            this.preprocessCreateOrReplace(textAfterQualify);
 
         // Preprocess DELETE with USING clause
         const { processedText: textAfterDeleteUsing, usingClause } =
@@ -899,6 +995,9 @@ export class SQLParser {
 
             // Post-processing for CREATE OR REPLACE
             let processedAst = this.postprocessCreateOrReplace(ast, createOrReplaceMatch);
+
+            // Post-processing for QUALIFY clause
+            processedAst = this.postprocessQualify(processedAst, qualifyClause);
 
             // Post-processing for DELETE with USING
             processedAst = this.postprocessDeleteUsing(processedAst, usingClause);
