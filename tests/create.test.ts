@@ -239,7 +239,7 @@ ORDER BY t.arena_id
     });
 
     test("Between columns comments", async () => {
-        const unformatted = `create table my_table (
+        const unformatted = `create or replace table public.my_table (
 id INT PRIMARY KEY,
 name VARCHAR(100),
 -- bio props
@@ -249,7 +249,7 @@ height FLOAT,
 state VARCHAR(50),
 country VARCHAR(50)
 );`;
-        const expected = `CREATE TABLE my_table (
+        const expected = `CREATE OR REPLACE TABLE public.my_table (
       id      INT PRIMARY KEY
     , name    VARCHAR(100)
     -- bio props
