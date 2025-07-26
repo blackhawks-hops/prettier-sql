@@ -317,4 +317,35 @@ primary key (SEASON, LEAGUE_ID_HAWKS, MANPOWER_CODE, ZONE, AREA_NAME, IS_RUSH)
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Full table with comments", async () => {
+        const unformatted = `CREATE OR REPLACE TABLE public.player (
+        id VARCHAR(24)
+      , name VARCHAR(30)
+      -- SKATER
+      , skating FLOAT
+      , skill FLOAT
+      -- GOALIE
+      , footwork FLOAT
+      , pace FLOAT
+      --
+      , created DATETIME
+);`;
+        const expected = `CREATE OR REPLACE TABLE public.player (
+      id       VARCHAR(24)
+    , name     VARCHAR(30)
+    -- SKATER
+    , skating  FLOAT
+    , skill    FLOAT
+    -- GOALIE
+    , footwork FLOAT
+    , pace     FLOAT
+    --
+    , created  DATETIME
+)
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

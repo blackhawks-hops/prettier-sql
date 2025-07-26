@@ -141,8 +141,8 @@ export class SQLParser {
         const inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
 
         // Find inline comments (-- comment) but not at the start of a line
-        // Match: word/identifier followed by whitespace and then -- comment (but stop before ; or ))
-        const inlineCommentRegex = /(\w+(?:\([^)]*\))?)\s+(--\s*[^;\r\n)]*)/g;
+        // Match: word/identifier followed by whitespace and then -- comment (but stop at SQL terminators)
+        const inlineCommentRegex = /(\w+(?:\([^)]*\))?)\s+(--[^;\r\n)]*)/g;
         let match;
 
         while ((match = inlineCommentRegex.exec(sql)) !== null) {
@@ -405,9 +405,9 @@ export class SQLParser {
         // Parse all comments and their positions
         lines.forEach((line, lineIndex) => {
             // Check for standalone comment first (line with only whitespace before --)
-            const standaloneMatch = line.match(/^\s*--\s*(.+)$/);
+            const standaloneMatch = line.match(/^\s*--\s*(.*)$/);
             // Check for inline comment (content before the --)
-            const inlineMatch = line.match(/^(.+\S)\s+--\s*(.+)$/);
+            const inlineMatch = line.match(/^(.+\S)\s+--\s*(.*)$/);
 
             if (standaloneMatch) {
                 commentInfo.push({
@@ -872,13 +872,18 @@ export class SQLParser {
         const { processedText: textAfterGreatestLeast, greatestLeastFunctions } =
             this.preprocessGreatestLeast(textAfterCustomTypes);
 
-        // Preprocess inline comments ONLY for CREATE statements (node-sql-parser needs this)
+        // Preprocess inline comments ONLY for CREATE statements WITH ACTUAL inline comments (node-sql-parser needs this)
         let textAfterInlineComments = textAfterGreatestLeast;
         let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
         if (cleanText.trim().toUpperCase().startsWith("CREATE")) {
-            const preprocessResult = this.preprocessInlineComments(textAfterGreatestLeast);
-            textAfterInlineComments = preprocessResult.processedText;
-            inlineComments = preprocessResult.inlineComments;
+            // Check if there are actual inline comments (comments on same line as SQL content, not standalone)
+            // Look for pattern: SQL_content -- comment_text (content after --)
+            const hasInlineComments = /\w+[^-\r\n]*--[^\r\n]*\S/.test(cleanText);
+            if (hasInlineComments) {
+                const preprocessResult = this.preprocessInlineComments(textAfterGreatestLeast);
+                textAfterInlineComments = preprocessResult.processedText;
+                inlineComments = preprocessResult.inlineComments;
+            }
         }
 
         // Preprocess block comments (still using old approach for now)
