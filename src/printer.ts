@@ -1339,8 +1339,11 @@ function formatBinaryExpressionWithIndent(expr: any, statement?: any): doc.build
         // Left side of the expression
         if (expr.left.type === "binary_expr" && ["AND", "OR"].includes(expr.left.operator.toUpperCase())) {
             parts.push(formatBinaryExpressionWithIndent(expr.left, statement));
-        } else {
+        } else if (expr.left.type === "binary_expr") {
             parts.push(formatBinaryExpression(expr.left, statement));
+        } else {
+            // Handle non-binary expressions (like unary_expr, column_ref, etc.)
+            parts.push(formatExpressionValue(expr.left, statement));
         }
 
         // AND/OR operator and right side with indent
@@ -1406,6 +1409,11 @@ function formatExpressionValue(expr: any, statement?: any): string {
         return `'${expr.value}'`;
     } else if (expr.type === "bool") {
         return expr.value ? "true" : "false";
+    } else if (expr.type === "unary_expr") {
+        // Handle unary expressions like NOT, +, -, etc.
+        const operator = expr.operator?.toUpperCase() || "";
+        const operand = formatExpressionValue(expr.expr, statement);
+        return `${operator} ${operand}`;
     }
     return expr.value || "";
 }
