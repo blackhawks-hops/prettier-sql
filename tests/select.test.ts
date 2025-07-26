@@ -568,10 +568,10 @@ WHERE NOT active
     `;
 
         const expected = `SELECT id -- comment on a line
+     -- comment between lines
      , name
      , email
 FROM users
-
 ;`;
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);

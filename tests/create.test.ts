@@ -238,6 +238,32 @@ ORDER BY t.arena_id
         expect(formatted.trim()).toBe(expected);
     });
 
+    test("Between columns comments", async () => {
+        const unformatted = `create table my_table (
+id INT PRIMARY KEY,
+name VARCHAR(100),
+-- bio props
+weight FLOAT,
+height FLOAT,
+-- geo props
+state VARCHAR(50),
+country VARCHAR(50)
+);`;
+        const expected = `CREATE TABLE my_table (
+      id      INT PRIMARY KEY
+    , name    VARCHAR(100)
+    -- bio props
+    , weight  FLOAT
+    , height  FLOAT
+    -- geo props
+    , state   VARCHAR(50)
+    , country VARCHAR(50)
+)
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
     test("Comment on table", async () => {
         const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100)) COMMENT = 'This is a sample table';`;
         const expected = `CREATE TABLE my_table (

@@ -387,7 +387,174 @@ export class SQLParser {
     }
 
     /**
-     * Apply post-processing for inline comments
+     * Attach comments directly to AST nodes for both SELECT and CREATE statements
+     * This creates a more natural association between comments and SQL elements
+     */
+    static attachCommentsToNodes(originalSQL: string, ast: any): any {
+        if (!ast || !originalSQL) {
+            return ast;
+        }
+
+        const lines = originalSQL.split('\n');
+        const commentInfo: Array<{
+            lineIndex: number;
+            type: 'inline' | 'standalone';
+            sqlContent?: string;
+            comment: string;
+        }> = [];
+
+        // Parse all comments and their positions
+        lines.forEach((line, lineIndex) => {
+            // Check for standalone comment first (line with only whitespace before --)
+            const standaloneMatch = line.match(/^\s*--\s*(.+)$/);
+            // Check for inline comment (content before the --)
+            const inlineMatch = line.match(/^(.+\S)\s+--\s*(.+)$/);
+
+            if (standaloneMatch) {
+                commentInfo.push({
+                    lineIndex,
+                    type: 'standalone',
+                    comment: standaloneMatch[1].trim()
+                });
+            } else if (inlineMatch) {
+                commentInfo.push({
+                    lineIndex,
+                    type: 'inline',
+                    sqlContent: inlineMatch[1].trim(),
+                    comment: inlineMatch[2].trim()
+                });
+            }
+        });
+
+        // Process statements to attach comments
+        const processStatement = (statement: any) => {
+            // Handle SELECT statements
+            if (statement.type === 'select' && statement.columns) {
+                statement.columns = statement.columns.map((column: any, columnIndex: number) => {
+                    const enhanced = { ...column };
+
+                    // Find trailing comments (inline comments after this column)
+                    const trailingComment = commentInfo.find(info => 
+                        info.type === 'inline' && 
+                        info.sqlContent && 
+                        column.expr?.column && 
+                        info.sqlContent.includes(column.expr.column)
+                    );
+
+                    if (trailingComment) {
+                        enhanced.trailingComment = trailingComment.comment;
+                    }
+
+                    // Handle leading comments (standalone comments before this column)
+                    if (columnIndex > 0) {
+                        const prevColumn = statement.columns[columnIndex - 1];
+                        const prevColumnLine = this.findColumnLineInSQL(lines, prevColumn.expr?.column);
+                        const thisColumnLine = this.findColumnLineInSQL(lines, column.expr?.column);
+
+                        const leadingComments = commentInfo.filter(info => 
+                            info.type === 'standalone' && 
+                            info.lineIndex > prevColumnLine && 
+                            info.lineIndex < thisColumnLine
+                        );
+
+                        if (leadingComments.length > 0) {
+                            enhanced.leadingComments = leadingComments.map(c => c.comment);
+                        }
+                    }
+
+                    return enhanced;
+                });
+            }
+            
+            // Handle CREATE TABLE statements
+            else if (statement.type === 'create' && statement.keyword === 'table' && statement.create_definitions) {
+                statement.create_definitions = statement.create_definitions.map((def: any) => {
+                    const enhanced = { ...def };
+
+                    // Find trailing comments for this column definition
+                    if (def.column?.column) {
+                        const trailingComment = commentInfo.find(info => 
+                            info.type === 'inline' && 
+                            info.sqlContent && 
+                            // More precise matching: column name should be followed by whitespace or data type
+                            info.sqlContent.match(new RegExp(`\\b${def.column.column}\\s+\\w+.*`))
+                        );
+
+                        if (trailingComment) {
+                            enhanced.trailingComment = trailingComment.comment;
+                        }
+                    }
+
+                    return enhanced;
+                });
+            }
+        };
+
+        // Apply to single statement or array of statements
+        if (Array.isArray(ast)) {
+            ast.forEach(processStatement);
+        } else {
+            processStatement(ast);
+        }
+
+        return ast;
+    }
+
+    /**
+     * Attach preprocessed comments to AST nodes (for CREATE statements that needed preprocessing)
+     */
+    static attachPreprocessedCommentsToNodes(ast: any, inlineComments: Array<{ original: string; placeholder: string; comment: string }>): any {
+        if (!ast || inlineComments.length === 0) {
+            return ast;
+        }
+
+        // Process CREATE TABLE statements
+        const processStatement = (statement: any) => {
+            if (statement.type === 'create' && statement.keyword === 'table' && statement.create_definitions) {
+                statement.create_definitions = statement.create_definitions.map((def: any) => {
+                    const enhanced = { ...def };
+
+                    // Find comment for this column by checking if the original comment contains this column
+                    if (def.column?.column) {
+                        const relevantComment = inlineComments.find(commentInfo => {
+                            // Check the original text (before preprocessing) to see if it contains this column definition
+                            return commentInfo.original.includes(def.column.column);
+                        });
+
+                        if (relevantComment) {
+                            enhanced.trailingComment = relevantComment.comment;
+                        }
+                    }
+
+                    return enhanced;
+                });
+            }
+        };
+
+        // Apply to single statement or array of statements
+        if (Array.isArray(ast)) {
+            ast.forEach(processStatement);
+        } else {
+            processStatement(ast);
+        }
+
+        return ast;
+    }
+
+    /**
+     * Helper function to find which line a column appears on in the SQL
+     */
+    static findColumnLineInSQL(lines: string[], columnName: string | undefined): number {
+        if (!columnName) return -1;
+        
+        return lines.findIndex(line => 
+            line.includes(columnName) && 
+            !line.trim().startsWith('--')
+        );
+    }
+
+    /**
+     * Apply post-processing for inline comments (legacy method - will be replaced by attachCommentsToNodes)
      */
     static postprocessInlineComments(
         ast: any,
@@ -587,11 +754,16 @@ export class SQLParser {
                         const { processedText: textAfterGreatestLeast, greatestLeastFunctions } =
                             this.preprocessGreatestLeast(textAfterCustomTypes);
 
-                        // Preprocess inline comments
-                        const { processedText: textAfterInlineComments, inlineComments } =
-                            this.preprocessInlineComments(textAfterGreatestLeast);
+                        // Preprocess inline comments ONLY for CREATE statements (node-sql-parser needs this)
+                        let textAfterInlineComments = textAfterGreatestLeast;
+                        let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
+                        if (sqlOnly.trim().toUpperCase().startsWith('CREATE')) {
+                            const preprocessResult = this.preprocessInlineComments(textAfterGreatestLeast);
+                            textAfterInlineComments = preprocessResult.processedText;
+                            inlineComments = preprocessResult.inlineComments;
+                        }
 
-                        // Preprocess block comments
+                        // Preprocess block comments (still using old approach for now)
                         const { processedText: textAfterBlockComments, blockComments } =
                             this.preprocessBlockComments(textAfterInlineComments);
 
@@ -611,9 +783,6 @@ export class SQLParser {
                         // Apply post-processing for array index syntax
                         processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);
 
-                        // Apply post-processing for inline comments
-                        processedAst = this.postprocessInlineComments(processedAst, inlineComments);
-
                         // Apply post-processing for block comments
                         processedAst = this.postprocessBlockComments(processedAst, blockComments);
 
@@ -622,6 +791,14 @@ export class SQLParser {
 
                         // Apply post-processing for custom types
                         processedAst = this.postprocessCustomTypes(processedAst, customTypes);
+
+                        // NEW: Attach comments directly to AST nodes (for SELECT and CREATE statements)
+                        // For CREATE statements with preprocessed inline comments, merge both approaches
+                        if (inlineComments.length > 0) {
+                            processedAst = this.attachPreprocessedCommentsToNodes(processedAst, inlineComments);
+                        } else {
+                            processedAst = this.attachCommentsToNodes(sqlOnly, processedAst);
+                        }
 
                         // stmtAst could be an array (although unlikely for a single statement)
                         if (Array.isArray(processedAst)) {
@@ -675,11 +852,16 @@ export class SQLParser {
         const { processedText: textAfterGreatestLeast, greatestLeastFunctions } =
             this.preprocessGreatestLeast(textAfterCustomTypes);
 
-        // Preprocess inline comments
-        const { processedText: textAfterInlineComments, inlineComments } =
-            this.preprocessInlineComments(textAfterGreatestLeast);
+        // Preprocess inline comments ONLY for CREATE statements (node-sql-parser needs this)
+        let textAfterInlineComments = textAfterGreatestLeast;
+        let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
+        if (cleanText.trim().toUpperCase().startsWith('CREATE')) {
+            const preprocessResult = this.preprocessInlineComments(textAfterGreatestLeast);
+            textAfterInlineComments = preprocessResult.processedText;
+            inlineComments = preprocessResult.inlineComments;
+        }
 
-        // Preprocess block comments
+        // Preprocess block comments (still using old approach for now)
         const { processedText: textAfterBlockComments, blockComments } =
             this.preprocessBlockComments(textAfterInlineComments);
 
@@ -699,9 +881,6 @@ export class SQLParser {
             // Post-processing for array index syntax
             processedAst = this.postprocessArrayIndexSyntax(processedAst, arrayAccesses);
 
-            // Post-processing for inline comments
-            processedAst = this.postprocessInlineComments(processedAst, inlineComments);
-
             // Post-processing for block comments
             processedAst = this.postprocessBlockComments(processedAst, blockComments);
 
@@ -710,6 +889,14 @@ export class SQLParser {
 
             // Post-processing for custom types
             processedAst = this.postprocessCustomTypes(processedAst, customTypes);
+
+            // NEW: Attach comments directly to AST nodes (for SELECT and CREATE statements)
+            // For CREATE statements with preprocessed inline comments, merge both approaches
+            if (inlineComments.length > 0) {
+                processedAst = this.attachPreprocessedCommentsToNodes(processedAst, inlineComments);
+            } else {
+                processedAst = this.attachCommentsToNodes(cleanText, processedAst);
+            }
 
             return {
                 type: "sql",

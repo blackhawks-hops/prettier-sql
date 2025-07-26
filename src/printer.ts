@@ -114,27 +114,7 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
     }
 }
 
-/**
- * Helper function to restore inline comments from placeholders
- */
-function restoreInlineComments(text: string, statement: any): string {
-    if (!statement.inline_comments || statement.inline_comments.length === 0) {
-        return text;
-    }
-
-    let result = text;
-    statement.inline_comments.forEach((commentInfo: any) => {
-        // Check if the current text matches the part before the placeholder
-        // e.g., if placeholder was "VARCHAR(100) /* INLINE_COMMENT_PLACEHOLDER_0 */"
-        // and text is "VARCHAR(100)", then we should add the comment
-        const beforePlaceholder = commentInfo.placeholder.replace(/ \/\* INLINE_COMMENT_PLACEHOLDER_\d+ \*\//, "");
-        if (text === beforePlaceholder) {
-            result = text + " " + commentInfo.comment;
-        }
-    });
-
-    return result;
-}
+// Old restoreInlineComments function removed - all comments now attached directly to AST nodes
 
 /**
  * Helper function to restore block comments from placeholders
@@ -266,9 +246,17 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                         }
                     }
 
-                    // Now restore inline comments for the complete data type
-                    const dataTypeWithComments = restoreInlineComments(completeDataType, ast);
-                    columnDefs.push(dataTypeWithComments);
+                    // Check for attached trailing comment on this column definition
+                    if (def.trailingComment) {
+                        // Check if comment already starts with -- to avoid duplication
+                        if (def.trailingComment.startsWith('--')) {
+                            completeDataType += ` ${def.trailingComment}`;
+                        } else {
+                            completeDataType += ` -- ${def.trailingComment}`;
+                        }
+                    }
+                    
+                    columnDefs.push(completeDataType);
 
                     // Handle primary key constraint
                     if (def.primary_key) {
@@ -620,15 +608,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(";");
     }
     
-    // Clean up any remaining unresolved placeholders from string parts
-    const cleanedParts = parts.map(part => {
-        if (typeof part === 'string') {
-            return part.replace(/\/\* (?:INLINE_COMMENT_PLACEHOLDER|STANDALONE_COMMENT_PLACEHOLDER)_\d+ \*\//g, '');
-        }
-        return part;
-    });
-    
-    return join("", cleanedParts);
+    return join("", parts);
 }
 
 /**
@@ -795,9 +775,15 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
             }
         }
 
-        // Restore inline comments for this column
-        formattedColumn = restoreInlineComments(formattedColumn, statement);
-        
+        // Handle leading comments (comments before this column)
+        if (column.leadingComments && column.leadingComments.length > 0) {
+            column.leadingComments.forEach((comment: string) => {
+                parts.push(hardline);
+                parts.push("     -- ");
+                parts.push(comment);
+            });
+        }
+
         if (index === 0) {
             // First column directly after SELECT
             parts.push(" ");
@@ -807,6 +793,12 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
             parts.push(hardline);
             parts.push("     , ");
             parts.push(formattedColumn);
+        }
+
+        // Handle trailing comments (inline comments after this column)
+        if (column.trailingComment) {
+            parts.push(" -- ");
+            parts.push(column.trailingComment);
         }
     });
 
