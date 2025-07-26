@@ -545,14 +545,14 @@ WHERE status = 'active'
     });
 
     test("Where not", async () => {
-        const unformatted = `select id, name, email from users where not active and (id is not null or name is not null or email is not null);`;
+        const unformatted = `select id, name, email from users where not active and (id IS NULL or name is not null or height >= 60.0);`;
 
         const expected = `SELECT id
      , name
      , email
 FROM users
 WHERE NOT active
-  AND (id IS NOT NULL OR name IS NOT NULL OR email IS NOT NULL)
+  AND (id IS NULL OR name IS NOT NULL OR height >= 60.0)
 ;`;
 
         const formatted = await prettier.format(unformatted, options);

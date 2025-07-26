@@ -1316,9 +1316,12 @@ function formatBinaryExpression(expr: any, statement?: any): string {
 
     const operator = expr.operator;
 
-    // Special handling for IS NOT NULL condition
+    // Special handling for IS NULL and IS NOT NULL conditions
     if (operator === "IS NOT" && (right === "NULL" || (expr.right && expr.right.type === "null"))) {
         return `${left} IS NOT NULL`;
+    }
+    if (operator === "IS" && (right === "NULL" || (expr.right && expr.right.type === "null"))) {
+        return `${left} IS NULL`;
     }
 
     return `${left} ${operator} ${right}`;
@@ -1414,6 +1417,8 @@ function formatExpressionValue(expr: any, statement?: any): string {
         const operator = expr.operator?.toUpperCase() || "";
         const operand = formatExpressionValue(expr.expr, statement);
         return `${operator} ${operand}`;
+    } else if (expr.type === "null") {
+        return "NULL";
     }
     return expr.value || "";
 }
