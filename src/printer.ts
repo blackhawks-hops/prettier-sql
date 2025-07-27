@@ -1065,6 +1065,8 @@ function processArg(arg: any, statement?: any): string {
         return formatFunction(arg, statement);
     } else if (arg.type === "column_ref") {
         return formatColumnRef(arg);
+    } else if (arg.type === "binary_expr") {
+        return formatBinaryExpression(arg, statement);
     } else if (arg.type === "number") {
         return arg.value.toString();
     } else if (arg.type === "single_quote_string") {
@@ -1475,32 +1477,80 @@ function formatExpressionValue(expr: any, statement?: any): string {
  * Format a CASE expression
  */
 function formatCaseExpression(expr: any, statement?: any): string {
-    const parts: string[] = ["CASE"];
+    const whenClauses: string[] = [];
+    let elseClause: string | null = null;
     
-    // Handle CASE expr WHEN ... (simple case)
-    if (expr.expr) {
-        parts.push(formatExpressionValue(expr.expr, statement));
-    }
-    
-    // Handle WHEN and ELSE clauses from args array
+    // Collect WHEN and ELSE clauses from args array
     if (expr.args && Array.isArray(expr.args)) {
         for (const arg of expr.args) {
             if (arg.type === "when") {
                 const condition = formatExpressionValue(arg.cond, statement);
                 const result = formatExpressionValue(arg.result, statement);
-                parts.push(`WHEN ${condition} THEN ${result}`);
+                whenClauses.push(`WHEN ${condition} THEN ${result}`);
             } else if (arg.type === "else") {
                 const elseResult = formatExpressionValue(arg.result, statement);
-                parts.push(`ELSE ${elseResult}`);
+                elseClause = `ELSE ${elseResult}`;
             }
         }
     }
     
-    parts.push("END");
-    const result = parts.join(" ");
+    // Determine if this should be single-line or multi-line
+    const isSingleWhen = whenClauses.length === 1 && elseClause;
     
-    // Add parentheses if originally had them
-    return expr.parentheses ? `(${result})` : result;
+    if (isSingleWhen) {
+        // Single WHEN with ELSE: format on one line
+        const parts: string[] = ["CASE"];
+        
+        // Handle CASE expr WHEN ... (simple case)
+        if (expr.expr) {
+            parts.push(formatExpressionValue(expr.expr, statement));
+        }
+        
+        parts.push(...whenClauses);
+        if (elseClause) {
+            parts.push(elseClause);
+        }
+        parts.push("END");
+        
+        const result = parts.join(" ");
+        return expr.parentheses ? `(${result})` : result;
+    } else {
+        // Multiple WHENs: format with line breaks and indentation
+        const parts: string[] = [];
+        
+        // Start with CASE and first WHEN on same line
+        let caseStart = "CASE";
+        
+        // Handle CASE expr WHEN ... (simple case)
+        if (expr.expr) {
+            caseStart += ` ${formatExpressionValue(expr.expr, statement)}`;
+        }
+        
+        if (whenClauses.length > 0) {
+            parts.push(`${caseStart} ${whenClauses[0]}`);
+            
+            // Add remaining WHEN clauses with proper indentation
+            // Need to align with the first WHEN. The first line is "CASE WHEN", so subsequent lines
+            // should have enough spaces to align the WHEN keywords
+            const indent = "            "; // 12 spaces to align with first WHEN
+            for (let i = 1; i < whenClauses.length; i++) {
+                parts.push(`${indent}${whenClauses[i]}`);
+            }
+        } else {
+            parts.push(caseStart);
+        }
+        
+        // Add ELSE clause with same indentation as WHEN clauses
+        if (elseClause) {
+            parts.push(`            ${elseClause}`);
+        }
+        
+        // Add END with same indentation
+        parts.push("            END");
+        
+        const result = parts.join("\n");
+        return expr.parentheses ? `(${result})` : result;
+    }
 }
 
 /**

@@ -608,4 +608,45 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id_hawks ORDER BY sign_date DESC)
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("Case statement single row", async () => {
+        const unformatted = `SELECT id, name,
+         CASE WHEN status = 'active' THEN 'Active User' ELSE 'Inactive User' END AS user_status
+        FROM users
+        WHERE status IS NOT NULL;`;
+
+        const expected = `SELECT id
+     , name
+     , CASE WHEN status = 'active' THEN 'Active User' ELSE 'Inactive User' END AS user_status
+FROM users
+WHERE status IS NOT NULL
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("Case statements, multiple WHEN clauses", async () => {
+        const unformatted = `SELECT id, name,
+         CASE
+             WHEN status = 'active' THEN 'Active User'
+             WHEN status = 'inactive' THEN 'Inactive User'
+             ELSE 'Unknown Status'
+         END AS user_status
+        FROM users
+        WHERE status IS NOT NULL;`;
+
+        const expected = `SELECT id
+     , name
+     , CASE WHEN status = 'active' THEN 'Active User'
+            WHEN status = 'inactive' THEN 'Inactive User'
+            ELSE 'Unknown Status'
+            END AS user_status
+FROM users
+WHERE status IS NOT NULL
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
