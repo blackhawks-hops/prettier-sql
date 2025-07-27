@@ -100,7 +100,7 @@ function formatStatement(ast: AST | GrantAst | undefined, includeSemicolon: bool
             return formatGrant(ast as GrantAst);
         case "comment":
             // Handle comment nodes by returning their text content
-            return (ast as GrantAst).text || "";
+            return (ast as any).value || (ast as GrantAst).text || "";
         case "raw":
             return (ast as GrantAst).value || "";
         default:
@@ -1165,7 +1165,19 @@ function formatFrom(fromItems: any[]): doc.builders.DocCommand {
             parts.push(", ");
         }
 
-        parts.push(fromText);
+        // Check if the table name contains PIVOT/UNPIVOT syntax
+        const pivotMatch = fromText.match(/^(.+?)\s+((?:UN)?PIVOT\(.+\))$/);
+        if (pivotMatch) {
+            // Split table name and PIVOT clause
+            const tableName = pivotMatch[1];
+            const pivotClause = pivotMatch[2];
+            
+            parts.push(tableName);
+            parts.push(hardline);
+            parts.push(pivotClause);
+        } else {
+            parts.push(fromText);
+        }
     });
 
     return join("", parts);

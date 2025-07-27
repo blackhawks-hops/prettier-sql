@@ -15,6 +15,53 @@ export class SQLParser {
     }
 
     /**
+     * Check if the SQL contains standalone comments before SQL statements
+     */
+    static hasStandaloneComments(sql: string): boolean {
+        const lines = sql.split('\n');
+        let foundComment = false;
+        let foundSql = false;
+        
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('--') || trimmed.startsWith('/*')) {
+                foundComment = true;
+            } else if (trimmed && !trimmed.startsWith('--') && !trimmed.startsWith('/*')) {
+                foundSql = true;
+                break;
+            }
+        }
+        
+        return foundComment && foundSql;
+    }
+
+    /**
+     * Separate standalone comments from SQL statements
+     */
+    static separateCommentsFromSQL(sql: string): { comments: string[]; sqlStatement: string } {
+        const lines = sql.split('\n');
+        const comments: string[] = [];
+        const sqlLines: string[] = [];
+        let inSqlSection = false;
+        
+        for (const line of lines) {
+            const trimmed = line.trim();
+            
+            if (!inSqlSection && (trimmed.startsWith('--') || trimmed.startsWith('/*') || trimmed === '')) {
+                comments.push(line);
+            } else {
+                inSqlSection = true;
+                sqlLines.push(line);
+            }
+        }
+        
+        return {
+            comments,
+            sqlStatement: sqlLines.join('\n').trim()
+        };
+    }
+
+    /**
      * Split SQL into multiple statements
      */
     static splitStatements(sql: string): string[] {
@@ -44,9 +91,9 @@ export class SQLParser {
      * Parse a GRANT statement into a custom AST structure
      */
     static parseGrantStatement(sql: string): any {
-        // Basic regex pattern to extract parts of the GRANT statement
+        // Enhanced regex pattern to handle multiple privileges separated by commas
         const grantRegex =
-            /^\s*GRANT\s+([^\s]+)\s+ON\s+([^\s]+)\s+([^\s]+)(?:\s+IN\s+([^\s]+)\s+([^\s]+))?\s+TO\s+([^\s]+)\s+([^;]+);?\s*$/i;
+            /^\s*GRANT\s+([^ON]+)\s+ON\s+([^\s]+)\s+([^\s]+)(?:\s+IN\s+([^\s]+)\s+([^\s]+))?\s+TO\s+([^\s]+)\s+([^;]+);?\s*$/i;
         const match = sql.match(grantRegex);
 
         if (!match) {
@@ -62,7 +109,7 @@ export class SQLParser {
 
         return {
             type: "grant",
-            privilege: privilege?.toUpperCase(),
+            privilege: privilege?.trim().toUpperCase(),
             on_type: onType?.toUpperCase(),
             on_name: onName,
             in_type: inType?.toUpperCase(),
@@ -615,6 +662,73 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for PIVOT/UNPIVOT syntax that is not supported by node-sql-parser
+     * Returns an object with the processed text and the PIVOT occurrences for post-processing
+     */
+    static preprocessPivot(sql: string): {
+        processedText: string;
+        pivotOccurrences: Array<{ original: string; placeholder: string; type: 'PIVOT' | 'UNPIVOT' }>;
+    } {
+        let processedText = sql;
+        const pivotOccurrences: Array<{ original: string; placeholder: string; type: 'PIVOT' | 'UNPIVOT' }> = [];
+
+        // Find PIVOT patterns (including UNPIVOT) - need to handle nested parentheses
+        // Process occurrences from end to start to avoid index shifting issues
+        const matches: Array<{ match: RegExpExecArray; original: string; type: 'PIVOT' | 'UNPIVOT' }> = [];
+        const pivotStartRegex = /\b(PIVOT|UNPIVOT)\s*\(/gi;
+        let match;
+
+        // First, collect all matches
+        while ((match = pivotStartRegex.exec(sql)) !== null) {
+            const pivotType = match[1].toUpperCase() as 'PIVOT' | 'UNPIVOT';
+            const startIndex = match.index;
+            const openParenIndex = match.index + match[0].length - 1; // Position of opening parenthesis
+            
+            // Find the matching closing parenthesis
+            let depth = 1;
+            let pos = openParenIndex + 1;
+            let endIndex = -1;
+            
+            while (pos < sql.length && depth > 0) {
+                if (sql[pos] === '(') depth++;
+                else if (sql[pos] === ')') depth--;
+                
+                if (depth === 0) {
+                    endIndex = pos;
+                    break;
+                }
+                pos++;
+            }
+            
+            if (endIndex !== -1) {
+                const original = sql.substring(startIndex, endIndex + 1);
+                matches.push({ match, original, type: pivotType });
+            }
+        }
+
+        // Process matches from end to start to avoid index shifting
+        matches.reverse().forEach((matchInfo) => {
+            const { original, type } = matchInfo;
+            
+            // Create a placeholder that node-sql-parser can handle
+            // We'll use a simple identifier that we can identify later
+            const placeholder = `__PIVOT_${pivotOccurrences.length}__`;
+
+            // Replace PIVOT/UNPIVOT with our placeholder
+            processedText = processedText.replace(original, placeholder);
+
+            // Store the mapping for post-processing
+            pivotOccurrences.push({
+                original,
+                placeholder,
+                type,
+            });
+        });
+
+        return { processedText, pivotOccurrences };
+    }
+
+    /**
      * Preprocess SQL for GROUP BY ALL syntax that is not supported by node-sql-parser
      * Returns an object with the processed text and the GROUP BY ALL occurrences for post-processing
      */
@@ -1124,6 +1238,59 @@ export class SQLParser {
     }
 
     /**
+     * Apply post-processing for PIVOT/UNPIVOT - mark PIVOT nodes
+     */
+    static postprocessPivot(
+        ast: any,
+        pivotOccurrences: Array<{ original: string; placeholder: string; type: 'PIVOT' | 'UNPIVOT' }>,
+    ): any {
+        if (!ast || pivotOccurrences.length === 0) {
+            return ast;
+        }
+
+        // Recursively traverse the AST and find nodes with our placeholders
+        const processNode = (node: any) => {
+            if (!node || typeof node !== "object") {
+                return;
+            }
+
+            // Check if this node contains any of our PIVOT placeholders
+            Object.keys(node).forEach((key) => {
+                if (typeof node[key] === "string") {
+                    // Check if this string contains any of our placeholders
+                    for (const occurrence of pivotOccurrences) {
+                        if (node[key].includes(occurrence.placeholder)) {
+                            // Replace the placeholder with the original PIVOT syntax
+                            node[key] = node[key].replace(occurrence.placeholder, occurrence.original);
+                            
+                            // Mark this node as containing PIVOT syntax
+                            if (!node.pivot_info) {
+                                node.pivot_info = [];
+                            }
+                            node.pivot_info.push({
+                                type: occurrence.type,
+                                original: occurrence.original
+                            });
+                        }
+                    }
+                } else if (Array.isArray(node[key])) {
+                    node[key].forEach((item: any) => processNode(item));
+                } else if (typeof node[key] === "object" && node[key] !== null) {
+                    processNode(node[key]);
+                }
+            });
+        };
+
+        if (Array.isArray(ast)) {
+            ast.forEach(processNode);
+        } else {
+            processNode(ast);
+        }
+
+        return ast;
+    }
+
+    /**
      * Apply post-processing for GROUP BY ALL - mark GROUP BY nodes
      */
     static postprocessGroupByAll(
@@ -1237,9 +1404,13 @@ export class SQLParser {
                         const { processedText: textAfterGreatestLeast, greatestLeastFunctions } =
                             this.preprocessGreatestLeast(textAfterCustomTypes);
 
+                        // Preprocess PIVOT/UNPIVOT syntax
+                        const { processedText: textAfterPivot, pivotOccurrences } =
+                            this.preprocessPivot(textAfterGreatestLeast);
+
                         // Preprocess GROUP BY ALL syntax
                         const { processedText: textAfterGroupByAll, groupByAllOccurrences } =
-                            this.preprocessGroupByAll(textAfterGreatestLeast);
+                            this.preprocessGroupByAll(textAfterPivot);
 
                         // Preprocess inline comments ONLY for CREATE statements (node-sql-parser needs this)
                         let textAfterInlineComments = textAfterGroupByAll;
@@ -1284,6 +1455,9 @@ export class SQLParser {
 
                         // Apply post-processing for GROUP BY ALL
                         processedAst = this.postprocessGroupByAll(processedAst, groupByAllOccurrences);
+
+                        // Apply post-processing for PIVOT/UNPIVOT
+                        processedAst = this.postprocessPivot(processedAst, pivotOccurrences);
 
                         // Apply post-processing for custom types
                         processedAst = this.postprocessCustomTypes(processedAst, customTypes);
@@ -1332,6 +1506,44 @@ export class SQLParser {
                 },
             };
         }
+        // Handle statements with standalone comments before SQL
+        else if (this.hasStandaloneComments(cleanText)) {
+            const { comments, sqlStatement } = this.separateCommentsFromSQL(cleanText);
+            
+            // Parse the SQL statement separately
+            let sqlAst: any;
+            
+            // Check if the SQL part is a GRANT statement
+            if (this.isGrantStatement(sqlStatement)) {
+                sqlAst = this.parseGrantStatement(sqlStatement);
+            } else {
+                // For other SQL statements, parse normally (but this will likely still fail)
+                // For now, create a simple structure
+                sqlAst = {
+                    type: "unknown",
+                    statement: sqlStatement,
+                };
+            }
+            
+            // Create an AST that includes both comments and SQL
+            const combinedAst = [
+                ...comments.map(comment => ({
+                    type: "comment",
+                    value: comment,
+                })),
+                sqlAst
+            ];
+            
+            return {
+                type: "sql",
+                text: cleanText,
+                ast: combinedAst,
+                loc: {
+                    start: { line: 1, column: 0 },
+                    end: { line: lines.length, column: lines[lines.length - 1].length },
+                },
+            };
+        }
 
         // Preprocess QUALIFY clause
         const { processedText: textAfterQualify, qualifyClause, castings } = this.preprocessQualify(cleanText);
@@ -1351,9 +1563,13 @@ export class SQLParser {
         const { processedText: textAfterGreatestLeast, greatestLeastFunctions } =
             this.preprocessGreatestLeast(textAfterCustomTypes);
 
+        // Preprocess PIVOT/UNPIVOT syntax
+        const { processedText: textAfterPivot, pivotOccurrences } =
+            this.preprocessPivot(textAfterGreatestLeast);
+
         // Preprocess GROUP BY ALL syntax
         const { processedText: textAfterGroupByAll, groupByAllOccurrences } =
-            this.preprocessGroupByAll(textAfterGreatestLeast);
+            this.preprocessGroupByAll(textAfterPivot);
 
         // Preprocess inline comments ONLY for CREATE statements WITH ACTUAL inline comments (node-sql-parser needs this)
         let textAfterInlineComments = textAfterGroupByAll;
@@ -1403,6 +1619,9 @@ export class SQLParser {
 
             // Post-processing for GROUP BY ALL
             processedAst = this.postprocessGroupByAll(processedAst, groupByAllOccurrences);
+
+            // Post-processing for PIVOT/UNPIVOT
+            processedAst = this.postprocessPivot(processedAst, pivotOccurrences);
 
             // Post-processing for custom types
             processedAst = this.postprocessCustomTypes(processedAst, customTypes);
