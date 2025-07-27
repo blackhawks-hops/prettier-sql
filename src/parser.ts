@@ -1,6 +1,9 @@
 import { Parser } from "node-sql-parser";
 import { SQLNode } from "./types";
 
+// Global storage for QUALIFY clauses that need to be restored
+const qualifyStorage = new Map<string, string>();
+
 export class SQLParser {
     private static parser = new Parser();
 
@@ -197,8 +200,100 @@ export class SQLParser {
     /**
      * Preprocess SQL for QUALIFY clause (Snowflake/BigQuery extension)
      * QUALIFY is like WHERE but for window functions - not supported by node-sql-parser
+     * This function also handles QUALIFY clauses inside CTEs
      */
     static preprocessQualify(sql: string): {
+        processedText: string;
+        qualifyClause: string | null;
+    } {
+        let processedText = sql;
+
+        // First, handle QUALIFY clauses inside CTEs
+        processedText = this.preprocessQualifyInCTEs(processedText);
+
+        // Then handle top-level QUALIFY clause
+        const topLevelResult = this.preprocessSingleQualify(processedText);
+        
+        return {
+            processedText: topLevelResult.processedText,
+            qualifyClause: topLevelResult.qualifyClause
+        };
+    }
+
+    /**
+     * Preprocess QUALIFY clauses inside CTE definitions
+     */
+    static preprocessQualifyInCTEs(sql: string): string {
+        // Clear previous QUALIFY storage
+        qualifyStorage.clear();
+        
+        // Use a more robust approach to find CTE patterns with proper parentheses matching
+        const cteNamePattern = /(\w+)\s+AS\s*\(/gi;
+        let result = sql;
+        let match;
+        
+        // Reset the regex state
+        cteNamePattern.lastIndex = 0;
+        
+        while ((match = cteNamePattern.exec(sql)) !== null) {
+            const cteName = match[1]; // Extract the CTE name
+            const cteStart = match[0];
+            const startPos = match.index! + cteStart.length;
+            
+            // Find the matching closing parenthesis
+            let depth = 1;
+            let pos = startPos;
+            let cteEnd = -1;
+            
+            while (pos < sql.length && depth > 0) {
+                if (sql[pos] === '(') depth++;
+                else if (sql[pos] === ')') depth--;
+                
+                if (depth === 0) {
+                    cteEnd = pos;
+                    break;
+                }
+                pos++;
+            }
+            
+            if (cteEnd !== -1) {
+                const cteContent = sql.substring(startPos, cteEnd);
+                const processedCTE = this.preprocessSingleQualify(cteContent);
+                
+                if (processedCTE.qualifyClause) {
+                    // Store the QUALIFY clause for later restoration
+                    qualifyStorage.set(cteName, processedCTE.qualifyClause);
+                    
+                    // Replace with just the processed content (no comment)
+                    const fullReplacement = cteStart + processedCTE.processedText + ')';
+                    const originalCTE = sql.substring(match.index!, cteEnd + 1);
+                    
+                    result = result.replace(originalCTE, fullReplacement);
+                }
+            }
+        }
+        
+        return result;
+    }
+
+    /**
+     * Get stored QUALIFY clause for a CTE name
+     */
+    static getStoredQualify(cteName: string): string | undefined {
+        return qualifyStorage.get(cteName);
+    }
+
+    /**
+     * Get all stored QUALIFY clauses
+     */
+    static getAllStoredQualify(): Map<string, string> {
+        return qualifyStorage;
+    }
+
+    /**
+     * Preprocess a single QUALIFY clause
+     */
+    static preprocessSingleQualify(sql: string): {
         processedText: string;
         qualifyClause: string | null;
     } {
@@ -226,9 +321,14 @@ export class SQLParser {
                 depth++;
             } else if (char === ')') {
                 depth--;
+                // Check if we're closing the CTE/subquery
+                if (depth < 0) {
+                    qualifyEnd = currentPos;
+                    break;
+                }
             } else if (depth === 0) {
                 // Only check for keywords when we're not inside parentheses
-                if (remaining.match(/^\s*(?:ORDER\s+BY|LIMIT|UNION|;|$)/i)) {
+                if (remaining.match(/^\s*(?:ORDER\s+BY|LIMIT|UNION|;|\)|$)/i)) {
                     qualifyEnd = currentPos;
                     break;
                 }

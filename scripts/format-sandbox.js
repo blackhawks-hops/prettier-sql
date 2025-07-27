@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import fs from 'fs';
 import path from 'path';
 import prettier from 'prettier';
@@ -29,14 +27,16 @@ async function formatSandbox() {
 
         // Read the SQL file
         const sqlContent = fs.readFileSync(sandboxPath, 'utf8');
-        
+
         console.log('📄 Original SQL:');
         console.log('=' .repeat(50));
         console.log(sqlContent);
         console.log('=' .repeat(50));
 
-        // Import the plugin dynamically
-        const sqlPlugin = await import(pluginPath);
+        // Import the plugin - handle CommonJS export
+        const pluginModule = await import(`file://${pluginPath}`);
+        // The plugin might be default export or named exports
+        const sqlPlugin = pluginModule.default || pluginModule;
 
         // Format with prettier
         const formatted = await prettier.format(sqlContent, {

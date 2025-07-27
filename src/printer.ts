@@ -1,6 +1,7 @@
 import { doc } from "prettier";
 import { SQLNode } from "./types";
 import { AST, Select, Create, Update, Delete, TableExpr } from "node-sql-parser";
+import { SQLParser } from "./parser";
 
 // Define our custom AST types
 interface GrantAst {
@@ -445,8 +446,8 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             parts.push(ast.view.view);
         }
 
-        parts.push(" AS ");
-        parts.push(formatSelect(ast.select, false));
+        parts.push(" AS");
+        parts.push([hardline, formatSelect(ast.select, false)]);
     }
 
     // We don't add a hardline for schema creation
@@ -463,7 +464,6 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
  */
 function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
-    parts.push(hardline);
 
     // Handle WITH clause if present
     if (ast.with && ast.with.length > 0) {
@@ -481,7 +481,19 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
                 withParts.push(item.name.value);
                 if (item.stmt?.ast) {
                     withParts.push(" AS (");
-                    withParts.push(indent(formatStatement(item.stmt.ast, false)));
+                    
+                    // Check if this CTE has a stored QUALIFY clause
+                    const storedQualify = SQLParser.getStoredQualify(item.name.value);
+                    if (storedQualify) {
+                        // Add the QUALIFY clause to the AST before formatting
+                        const cteAst = item.stmt.ast as any;
+                        if (!cteAst.qualify) {
+                            cteAst.qualify = storedQualify;
+                        }
+                    }
+                    
+                    const cteContent = formatStatement(item.stmt.ast, false);
+                    withParts.push(indent([hardline, cteContent]));
                     withParts.push(hardline);
                     withParts.push(")");
                 }
@@ -510,7 +522,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
             // Handle subquery in FROM
             parts.push("(");
             if ((ast.from[0] as TableExpr).expr.ast && (ast.from[0] as TableExpr).expr.ast.type === "select") {
-                parts.push(indent(formatSelect((ast.from[0] as TableExpr).expr.ast, false)));
+                parts.push(indent([hardline, formatSelect((ast.from[0] as TableExpr).expr.ast, false)]));
                 parts.push(hardline);
             }
             parts.push(")");
@@ -553,13 +565,14 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(`GROUP BY ${ast.groupby.columns.map((item: any) => item.value || item.column || "").join(", ")}`);
     }
 
-    // Format QUALIFY clause
+
+    // Format QUALIFY clause (for regular QUALIFY clauses not in comments)
     if (ast.qualify) {
         parts.push(hardline);
         parts.push("QUALIFY ");
         // Format the QUALIFY expression - handle common patterns
         const qualifyText = typeof ast.qualify === 'string' ? ast.qualify : String(ast.qualify);
-        let formattedQualify = qualifyText
+        const formattedQualify = qualifyText
             .replace(/\brow_number\(\)/gi, 'ROW_NUMBER()')
             .replace(/\bover\s*\(/gi, 'OVER (')
             .replace(/\bpartition\s+by\b/gi, 'PARTITION BY')
@@ -624,7 +637,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push((ast as any).set_op.toUpperCase());
 
         // Format the next SELECT statement
-        parts.push(formatSelect((ast as any)._next, false));
+        parts.push([hardline, formatSelect((ast as any)._next, false)]);
     }
 
     if (includeSemicolon) {
@@ -689,7 +702,7 @@ function formatInsert(ast: any, includeSemicolon: boolean = true): doc.builders.
     if (ast.values) {
         if (ast.values.type === "select") {
             // Format the SELECT statement without semicolon
-            parts.push(formatSelect(ast.values as Select, false));
+            parts.push([hardline, formatSelect(ast.values as Select, false)]);
         } else if (Array.isArray(ast.values)) {
             // Handle VALUES clause with multiple value tuples
             parts.push(hardline);
@@ -1159,7 +1172,7 @@ function formatJoin(joinDefinition: any): doc.builders.DocCommand {
         // This is a subquery
         parts.push("(");
         if (joinItem.expr.ast && joinItem.expr.ast.type === "select") {
-            parts.push(indent(formatSelect(joinItem.expr.ast, false)));
+            parts.push(indent([hardline, formatSelect(joinItem.expr.ast, false)]));
             parts.push(hardline);
         }
         parts.push(")");
@@ -1242,7 +1255,7 @@ function formatWhere(where: any, statement?: any): doc.builders.DocCommand {
                 const subquery = where.right.value[0];
                 if (subquery && subquery.ast && subquery.ast.type === "select") {
                     parts.push("(");
-                    parts.push(indent(formatSelect(subquery.ast, false)));
+                    parts.push(indent([hardline, formatSelect(subquery.ast, false)]));
                     parts.push(hardline);
                     parts.push(")");
                     return join("", parts);
@@ -1265,7 +1278,7 @@ function formatWhere(where: any, statement?: any): doc.builders.DocCommand {
         // Format the subquery
         if (where.right && where.right.ast && where.right.ast.type === "select") {
             parts.push("(");
-            parts.push(indent(formatSelect(where.right.ast, false)));
+            parts.push(indent([hardline, formatSelect(where.right.ast, false)]));
             parts.push(hardline);
             parts.push(")");
         } else {
@@ -1280,7 +1293,7 @@ function formatWhere(where: any, statement?: any): doc.builders.DocCommand {
             const subquery = where.args.value[0];
             if (subquery && subquery.ast && subquery.ast.type === "select") {
                 parts.push("(");
-                parts.push(indent(formatSelect(subquery.ast, false)));
+                parts.push(indent([hardline, formatSelect(subquery.ast, false)]));
                 parts.push(hardline);
                 parts.push(")");
                 return join("", parts);
@@ -1290,7 +1303,7 @@ function formatWhere(where: any, statement?: any): doc.builders.DocCommand {
         // If no subquery found in args, check direct args property
         if (where.args && where.args.ast && where.args.ast.type === "select") {
             parts.push("(");
-            parts.push(indent(formatSelect(where.args.ast, false)));
+            parts.push(indent([hardline, formatSelect(where.args.ast, false)]));
             parts.push(hardline);
             parts.push(")");
         }
@@ -1330,6 +1343,12 @@ function formatBinaryExpression(expr: any, statement?: any): string {
             : formatExpressionValue(expr.right, statement);
 
     const operator = expr.operator;
+
+    // Special handling for BETWEEN operator
+    if (operator === "BETWEEN" && expr.right && expr.right.type === "expr_list" && Array.isArray(expr.right.value)) {
+        const rangeValues = expr.right.value.map((val: any) => formatExpressionValue(val, statement));
+        return `${left} BETWEEN ${rangeValues[0]} AND ${rangeValues[1]}`;
+    }
 
     // Special handling for IS NULL and IS NOT NULL conditions
     if (operator === "IS NOT" && (right === "NULL" || (expr.right && expr.right.type === "null"))) {
@@ -1434,6 +1453,10 @@ function formatExpressionValue(expr: any, statement?: any): string {
         return `${operator} ${operand}`;
     } else if (expr.type === "null") {
         return "NULL";
+    } else if (expr.type === "binary_expr") {
+        // Handle binary expressions and respect parentheses
+        const result = formatBinaryExpression(expr, statement);
+        return expr.parentheses ? `(${result})` : result;
     }
     return expr.value || "";
 }
@@ -1546,6 +1569,11 @@ function shouldAddBlankLine(prevStmt: any, currStmt: any): boolean {
     // No blank line between consecutive GRANT statements
     if (prevStmt.type === "grant" && currStmt.type === "grant") {
         return false;
+    }
+
+    // Add blank line between SELECT statements for better readability
+    if (prevStmt.type === "select" && currStmt.type === "select") {
+        return true;
     }
 
     // By default, add a blank line between different statement types

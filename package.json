@@ -18,16 +18,16 @@
     ],
     "scripts": {
         "build": "vite build",
-        "test": "vitest run",
-        "test:watch": "vitest",
+        "test": "vitest run --exclude '**/sandbox.test.ts'",
+        "test:watch": "vitest --exclude '**/sandbox.test.ts'",
         "test:coverage": "vitest run --coverage",
         "pretty": "prettier --write src/**/* tests/**/*.ts",
         "lint": "eslint . --ext .ts",
         "typecheck": "tsc --noEmit",
         "prepublishOnly": "npm run build",
         "dev": "vite build --watch",
-        "sandbox": "node scripts/format-sandbox.js",
-        "sandbox:write": "node scripts/format-sandbox.js --write"
+        "sandbox": "vitest run tests/sandbox.test.ts",
+        "sandbox:write": "echo 'Uncomment the writeFileSync line in tests/sandbox.test.ts to write back to file'"
     },
     "publishConfig": {
         "access": "public"
@@ -48,6 +48,7 @@
         "eslint": "^9.30.1",
         "globals": "^16.3.0",
         "prettier": "^3.6.2",
+        "tsx": "^4.7.0",
         "typescript": "^5.8.3",
         "typescript-eslint": "^8.35.1",
         "vite-plugin-dts": "^4.5.4",
