@@ -14,13 +14,20 @@ The parser is purly node-sql-parser, while the printer is a very opinionated way
 
 ## Commands
 
-- Build: `npm run build`
+- ⚠️ **NEVER run `npm run build`** - The user will build when needed
 - Dev/Watch mode: `npm run dev`
 - Test: `npm run test`
 - Run single test: `npx vitest run tests/select.test.ts`
 - Lint: `npm run lint`
 - Type checking: `npm run typecheck`
 - Format code: `npm run pretty`
+
+## Development Guidelines
+
+- **NEVER run build commands** - User handles building
+- **Always work in TypeScript** - Never suggest JavaScript alternatives
+- **Use vitest for testing** - This is the test framework for this project
+- **Stick to the existing architecture** - Parser/printer pattern with node-sql-parser
 
 ## Code Style
 
