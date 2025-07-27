@@ -198,6 +198,63 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess PostgreSQL-style casting (::type) to CAST(expression AS type)
+     * PostgreSQL syntax: expression::type
+     * Standard SQL syntax: CAST(expression AS type)
+     */
+    static preprocessPostgreSQLCasting(sql: string): string {
+        // Use a more sophisticated approach to handle nested structures like CASE statements
+        // We'll find all :: operators and work backwards to find the matching expression
+        let result = sql;
+        let changed = true;
+        
+        while (changed) {
+            changed = false;
+            // Find :: followed by a type name
+            const castMatch = result.match(/::\s*(\w+(?:\(\d+(?:,\d+)?\))?)/);
+            if (castMatch) {
+                const castStart = castMatch.index!;
+                const type = castMatch[1];
+                
+                // Find the expression before :: by going backwards and matching parentheses
+                let expressionStart = -1;
+                let depth = 0;
+                
+                // Start from just before the ::
+                for (let i = castStart - 1; i >= 0; i--) {
+                    const char = result[i];
+                    if (char === ')') {
+                        depth++;
+                    } else if (char === '(') {
+                        depth--;
+                        if (depth === 0) {
+                            // Found the matching opening parenthesis
+                            expressionStart = i;
+                            break;
+                        }
+                    } else if (depth === 0 && /\s|,/.test(char)) {
+                        // If we're not inside parentheses and hit whitespace or comma, stop
+                        expressionStart = i + 1;
+                        break;
+                    }
+                }
+                
+                if (expressionStart >= 0) {
+                    const expression = result.substring(expressionStart, castStart).trim();
+                    const castEnd = castStart + castMatch[0].length;
+                    
+                    // Replace expression::type with CAST(expression AS type)
+                    const replacement = `CAST(${expression} AS ${type})`;
+                    result = result.substring(0, expressionStart) + replacement + result.substring(castEnd);
+                    changed = true;
+                }
+            }
+        }
+        
+        return result;
+    }
+
+    /**
      * Preprocess SQL for QUALIFY clause (Snowflake/BigQuery extension)
      * QUALIFY is like WHERE but for window functions - not supported by node-sql-parser
      * This function also handles QUALIFY clauses inside CTEs
@@ -208,10 +265,13 @@ export class SQLParser {
     } {
         let processedText = sql;
 
-        // First, handle QUALIFY clauses inside CTEs
+        // First, handle PostgreSQL-style casting
+        processedText = this.preprocessPostgreSQLCasting(processedText);
+
+        // Then, handle QUALIFY clauses inside CTEs
         processedText = this.preprocessQualifyInCTEs(processedText);
 
-        // Then handle top-level QUALIFY clause
+        // Finally, handle top-level QUALIFY clause
         const topLevelResult = this.preprocessSingleQualify(processedText);
         
         return {

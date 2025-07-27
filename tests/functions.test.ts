@@ -85,6 +85,83 @@ FROM users
     });
 });
 
+describe("Concatenation operators", () => {
+    test("Simple || concatenation", async () => {
+        const sql = "SELECT first_name || ' ' || last_name FROM users;";
+        const expected = `SELECT first_name || ' ' || last_name
+FROM users
+;`;
+        const result = await formatSQL(sql);
+        expect(result).toBe(expected);
+    });
+
+    test("|| concatenation with strings", async () => {
+        const sql = "SELECT 'Hello ' || name || '!' FROM users;";
+        const expected = `SELECT 'Hello ' || name || '!'
+FROM users
+;`;
+        const result = await formatSQL(sql);
+        expect(result).toBe(expected);
+    });
+
+    test("|| concatenation with functions", async () => {
+        const sql = "SELECT YEAR(birthday) || '-' || MONTH(birthday) FROM users;";
+        const expected = `SELECT YEAR(birthday) || '-' || MONTH(birthday)
+FROM users
+;`;
+        const result = await formatSQL(sql);
+        expect(result).toBe(expected);
+    });
+
+    test("|| concatenation with numbers", async () => {
+        const sql = "SELECT id || '-' || YEAR(created_date) FROM orders;";
+        const expected = `SELECT id || '-' || YEAR(created_date)
+FROM orders
+;`;
+        const result = await formatSQL(sql);
+        expect(result).toBe(expected);
+    });
+
+    test("|| concatenation with arithmetic", async () => {
+        const sql = "SELECT name || ' is ' || (age + 5) || ' years old' FROM users;";
+        const expected = `SELECT name || ' is ' || age + 5 || ' years old'
+FROM users
+;`;
+        const result = await formatSQL(sql);
+        expect(result).toBe(expected);
+    });
+
+    test("Mixed CONCAT function and || operator", async () => {
+        const sql = "SELECT CONCAT(first_name, ' ') || last_name || CONCAT(' (', age, ')') FROM users;";
+        const expected = `SELECT CONCAT(first_name, ' ') || last_name || CONCAT(' (', age, ')')
+FROM users
+;`;
+        const result = await formatSQL(sql);
+        expect(result).toBe(expected);
+    });
+
+    test("|| in WHERE clause", async () => {
+        const sql = "SELECT * FROM users WHERE first_name || last_name = 'JohnDoe';";
+        const expected = `SELECT *
+FROM users
+WHERE first_name || last_name = 'JohnDoe'
+;`;
+        const result = await formatSQL(sql);
+        expect(result).toBe(expected);
+    });
+
+    test("Case with || concatenation", async () => {
+        const sql =
+            "SELECT *, (CASE WHEN CURRENT_DATE() > YEAR(CURRENT_DATE) || '-08-01' THEN YEAR(CURRENT_DATE) || YEAR(CURRENT_DATE)+1 ELSE YEAR(CURRENT_DATE)-1 || YEAR(CURRENT_DATE) END)::INT AS cur_season FROM season;";
+        const expected = `SELECT *
+     , CAST((CASE WHEN CURRENT_DATE > YEAR(CURRENT_DATE()) || '-08-01' THEN YEAR(CURRENT_DATE()) || YEAR(CURRENT_DATE()) + 1 ELSE YEAR(CURRENT_DATE()) - 1 || YEAR(CURRENT_DATE()) END) AS INT) AS cur_season
+FROM season
+;`;
+        const result = await formatSQL(sql);
+        expect(result).toBe(expected);
+    });
+});
+
 describe("BETWEEN operator", () => {
     test("Simple BETWEEN with numbers", async () => {
         const sql = "SELECT * FROM users WHERE age BETWEEN 18 AND 65;";

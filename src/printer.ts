@@ -802,6 +802,10 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
                 formattedColumn = column.expr.value.toString();
             } else if (column.expr.type === "binary_expr") {
                 formattedColumn = formatBinaryExpression(column.expr, statement);
+            } else if (column.expr.type === "case") {
+                formattedColumn = formatCaseExpression(column.expr, statement);
+            } else if (column.expr.type === "cast") {
+                formattedColumn = formatCastExpression(column.expr, statement);
             } else {
                 formattedColumn = String(column.expr.value || "");
             }
@@ -1457,8 +1461,65 @@ function formatExpressionValue(expr: any, statement?: any): string {
         // Handle binary expressions and respect parentheses
         const result = formatBinaryExpression(expr, statement);
         return expr.parentheses ? `(${result})` : result;
+    } else if (expr.type === "case") {
+        // Handle CASE expressions
+        return formatCaseExpression(expr, statement);
+    } else if (expr.type === "cast") {
+        // Handle CAST expressions
+        return formatCastExpression(expr, statement);
     }
     return expr.value || "";
+}
+
+/**
+ * Format a CASE expression
+ */
+function formatCaseExpression(expr: any, statement?: any): string {
+    const parts: string[] = ["CASE"];
+    
+    // Handle CASE expr WHEN ... (simple case)
+    if (expr.expr) {
+        parts.push(formatExpressionValue(expr.expr, statement));
+    }
+    
+    // Handle WHEN and ELSE clauses from args array
+    if (expr.args && Array.isArray(expr.args)) {
+        for (const arg of expr.args) {
+            if (arg.type === "when") {
+                const condition = formatExpressionValue(arg.cond, statement);
+                const result = formatExpressionValue(arg.result, statement);
+                parts.push(`WHEN ${condition} THEN ${result}`);
+            } else if (arg.type === "else") {
+                const elseResult = formatExpressionValue(arg.result, statement);
+                parts.push(`ELSE ${elseResult}`);
+            }
+        }
+    }
+    
+    parts.push("END");
+    const result = parts.join(" ");
+    
+    // Add parentheses if originally had them
+    return expr.parentheses ? `(${result})` : result;
+}
+
+/**
+ * Format a CAST expression
+ */
+function formatCastExpression(expr: any, statement?: any): string {
+    const expression = formatExpressionValue(expr.expr, statement);
+    
+    // Handle target data type - it's usually an array with the first element containing dataType
+    let dataType = "";
+    if (Array.isArray(expr.target) && expr.target.length > 0) {
+        dataType = expr.target[0].dataType || "";
+    } else if (expr.target?.dataType) {
+        dataType = expr.target.dataType;
+    } else {
+        dataType = expr.target || "";
+    }
+    
+    return `CAST(${expression} AS ${dataType.toString().toUpperCase()})`;
 }
 
 /**
