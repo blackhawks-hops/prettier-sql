@@ -22,3 +22,6 @@ coverage/
 .vscode/
 *.sublime-*
 .DS_Store
+
+# local sandbox test
+sandbox.sql
