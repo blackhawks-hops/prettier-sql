@@ -224,39 +224,49 @@ export class SQLParser {
                 let foundMatchingParen = false;
                 
                 // Start from just before the ::
+                let inQuotes = false;
                 for (let i = castStart - 1; i >= 0; i--) {
                     const char = result[i];
-                    if (char === ')') {
-                        depth++;
-                    } else if (char === '(') {
-                        depth--;
-                        if (depth === 0) {
-                            // Found the matching opening parenthesis
-                            foundMatchingParen = true;
-                            // Continue looking backwards for the function name or other expression parts
-                            // Look for word characters (function name) before the opening parenthesis
-                            for (let j = i - 1; j >= 0; j--) {
-                                const prevChar = result[j];
-                                if (/[a-zA-Z_]/.test(prevChar)) {
-                                    // Part of function name, continue
-                                    continue;
-                                } else if (/\s|,|=|<|>|\+|\-|\*|\/|\(/.test(prevChar)) {
-                                    // Found expression boundary
-                                    expressionStart = j + 1;
-                                    break;
+                    
+                    // Track whether we're inside quotes
+                    if (char === "'") {
+                        inQuotes = !inQuotes;
+                    }
+                    
+                    if (!inQuotes) {
+                        // Only process these characters when not inside quotes
+                        if (char === ')') {
+                            depth++;
+                        } else if (char === '(') {
+                            depth--;
+                            if (depth === 0) {
+                                // Found the matching opening parenthesis
+                                foundMatchingParen = true;
+                                // Continue looking backwards for the function name or other expression parts
+                                // Look for word characters (function name) before the opening parenthesis
+                                for (let j = i - 1; j >= 0; j--) {
+                                    const prevChar = result[j];
+                                    if (/[a-zA-Z_]/.test(prevChar)) {
+                                        // Part of function name, continue
+                                        continue;
+                                    } else if (/\s|,|=|<|>|\+|\-|\*|\/|\(/.test(prevChar)) {
+                                        // Found expression boundary
+                                        expressionStart = j + 1;
+                                        break;
+                                    }
+                                    
+                                    if (j === 0) {
+                                        expressionStart = 0;
+                                        break;
+                                    }
                                 }
-                                
-                                if (j === 0) {
-                                    expressionStart = 0;
-                                    break;
-                                }
+                                break;
                             }
+                        } else if (depth === 0 && /\s|,|=|<|>|\+|\-|\*|\/|\(/.test(char)) {
+                            // If we're not inside parentheses and hit an operator or boundary, stop
+                            expressionStart = i + 1;
                             break;
                         }
-                    } else if (depth === 0 && /\s|,|=|<|>|\+|\-|\*|\/|\(/.test(char)) {
-                        // If we're not inside parentheses and hit an operator or boundary, stop
-                        expressionStart = i + 1;
-                        break;
                     }
                     
                     if (i === 0) {
@@ -265,18 +275,34 @@ export class SQLParser {
                     }
                 }
                 
-                // If we didn't find parentheses, look for simple word boundaries
+                // If we didn't find parentheses, look for expression boundaries including quoted strings
                 if (!foundMatchingParen && expressionStart === -1) {
-                    // Look for the start of the expression (word/identifier boundary)
-                    for (let i = castStart - 1; i >= 0; i--) {
-                        const char = result[i];
-                        if (/\s|,|=|<|>|\+|\-|\*|\/|\(/.test(char)) {
-                            expressionStart = i + 1;
-                            break;
+                    // Check if we're dealing with a quoted string literal
+                    if (castStart > 0 && result[castStart - 1] === "'") {
+                        // Find the start of the quoted string
+                        for (let i = castStart - 2; i >= 0; i--) {
+                            if (result[i] === "'") {
+                                // Found the opening quote
+                                expressionStart = i;
+                                break;
+                            }
+                            if (i === 0) {
+                                expressionStart = 0;
+                                break;
+                            }
                         }
-                        if (i === 0) {
-                            expressionStart = 0;
-                            break;
+                    } else {
+                        // Look for the start of the expression (word/identifier boundary)
+                        for (let i = castStart - 1; i >= 0; i--) {
+                            const char = result[i];
+                            if (/\s|,|=|<|>|\+|\-|\*|\/|\(/.test(char)) {
+                                expressionStart = i + 1;
+                                break;
+                            }
+                            if (i === 0) {
+                                expressionStart = 0;
+                                break;
+                            }
                         }
                     }
                 }
