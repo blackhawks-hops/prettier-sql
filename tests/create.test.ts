@@ -171,7 +171,7 @@ WITH arena_city AS (
 )
 SELECT t.arena_id AS venue_id_eliteprospects
      , t.arena_name AS venue_name
-     , CAST(c.city AS VARCHAR) AS city
+     , c.city::VARCHAR AS city
      , t.country_id AS country_abbr
      , t.country_name AS country
      , MAX(last_updated) AS last_updated

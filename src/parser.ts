@@ -198,14 +198,16 @@ export class SQLParser {
     }
 
     /**
-     * Preprocess PostgreSQL-style casting (::type) to CAST(expression AS type)
-     * PostgreSQL syntax: expression::type
-     * Standard SQL syntax: CAST(expression AS type)
+     * Preprocess PostgreSQL-style casting (::type) for parsing
+     * Converts expression::type to a parseable format with a special marker
+     * The printer will convert it back to :: syntax
      */
-    static preprocessPostgreSQLCasting(sql: string): string {
-        // Use a more sophisticated approach to handle nested structures like CASE statements
-        // We'll find all :: operators and work backwards to find the matching expression
+    static preprocessPostgreSQLCasting(sql: string): {
+        processedText: string;
+        castings: Array<{ original: string; placeholder: string; expression: string; type: string }>;
+    } {
         let result = sql;
+        const castings: Array<{ original: string; placeholder: string; expression: string; type: string }> = [];
         let changed = true;
         
         while (changed) {
@@ -242,16 +244,29 @@ export class SQLParser {
                 if (expressionStart >= 0) {
                     const expression = result.substring(expressionStart, castStart).trim();
                     const castEnd = castStart + castMatch[0].length;
+                    const original = result.substring(expressionStart, castEnd);
                     
-                    // Replace expression::type with CAST(expression AS type)
-                    const replacement = `CAST(${expression} AS ${type})`;
-                    result = result.substring(0, expressionStart) + replacement + result.substring(castEnd);
+                    // Create a special placeholder that node-sql-parser can handle
+                    // Use CAST() internally but mark it for conversion back to :: syntax
+                    const placeholder = `CAST(${expression} AS ${type})`;
+                    const castId = castings.length;
+                    
+                    result = result.substring(0, expressionStart) + placeholder + result.substring(castEnd);
+                    
+                    // Store the casting info for post-processing
+                    castings.push({
+                        original,
+                        placeholder,
+                        expression,
+                        type
+                    });
+                    
                     changed = true;
                 }
             }
         }
         
-        return result;
+        return { processedText: result, castings };
     }
 
     /**
@@ -262,11 +277,11 @@ export class SQLParser {
     static preprocessQualify(sql: string): {
         processedText: string;
         qualifyClause: string | null;
+        castings: Array<{ original: string; placeholder: string; expression: string; type: string }>;
     } {
-        let processedText = sql;
-
         // First, handle PostgreSQL-style casting
-        processedText = this.preprocessPostgreSQLCasting(processedText);
+        const { processedText: textAfterCasting, castings } = this.preprocessPostgreSQLCasting(sql);
+        let processedText = textAfterCasting;
 
         // Then, handle QUALIFY clauses inside CTEs
         processedText = this.preprocessQualifyInCTEs(processedText);
@@ -276,7 +291,8 @@ export class SQLParser {
         
         return {
             processedText: topLevelResult.processedText,
-            qualifyClause: topLevelResult.qualifyClause
+            qualifyClause: topLevelResult.qualifyClause,
+            castings
         };
     }
 
@@ -531,6 +547,45 @@ export class SQLParser {
         }
 
         return { processedText, greatestLeastFunctions };
+    }
+
+    /**
+     * Apply post-processing for PostgreSQL casting - mark CAST nodes
+     */
+    static postprocessPostgreSQLCasting(
+        ast: any,
+        castings: Array<{ original: string; placeholder: string; expression: string; type: string }>
+    ): any {
+        if (!ast || castings.length === 0) {
+            return ast;
+        }
+
+        // Recursively traverse the AST and mark CAST nodes that were originally PostgreSQL casts
+        const markPostgreSQLCasts = (node: any) => {
+            if (!node || typeof node !== 'object') return;
+
+            if (node.type === 'cast') {
+                // Mark this CAST node as originally a PostgreSQL cast
+                node.postgresql_cast = true;
+            }
+
+            // Recursively process all properties
+            Object.keys(node).forEach(key => {
+                if (Array.isArray(node[key])) {
+                    node[key].forEach(markPostgreSQLCasts);
+                } else if (typeof node[key] === 'object') {
+                    markPostgreSQLCasts(node[key]);
+                }
+            });
+        };
+
+        if (Array.isArray(ast)) {
+            ast.forEach(markPostgreSQLCasts);
+        } else {
+            markPostgreSQLCasts(ast);
+        }
+
+        return ast;
     }
 
     /**
@@ -1006,7 +1061,7 @@ export class SQLParser {
                         parsedStatements.push(this.parseGrantStatement(sqlOnly));
                     } else {
                         // Preprocess QUALIFY clause
-                        const { processedText: textAfterQualify, qualifyClause } = this.preprocessQualify(sqlOnly);
+                        const { processedText: textAfterQualify, qualifyClause, castings } = this.preprocessQualify(sqlOnly);
 
                         // Preprocess CREATE OR REPLACE syntax
                         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
@@ -1046,6 +1101,9 @@ export class SQLParser {
 
                         // Apply post-processing for CREATE OR REPLACE
                         let processedAst = this.postprocessCreateOrReplace(stmtAst, createOrReplaceMatch);
+
+                        // Apply post-processing for PostgreSQL casting
+                        processedAst = this.postprocessPostgreSQLCasting(processedAst, castings);
 
                         // Apply post-processing for QUALIFY clause
                         processedAst = this.postprocessQualify(processedAst, qualifyClause);
@@ -1111,7 +1169,7 @@ export class SQLParser {
         }
 
         // Preprocess QUALIFY clause
-        const { processedText: textAfterQualify, qualifyClause } = this.preprocessQualify(cleanText);
+        const { processedText: textAfterQualify, qualifyClause, castings } = this.preprocessQualify(cleanText);
 
         // Preprocess CREATE OR REPLACE syntax
         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
@@ -1155,6 +1213,9 @@ export class SQLParser {
 
             // Post-processing for CREATE OR REPLACE
             let processedAst = this.postprocessCreateOrReplace(ast, createOrReplaceMatch);
+
+            // Post-processing for PostgreSQL casting
+            processedAst = this.postprocessPostgreSQLCasting(processedAst, castings);
 
             // Post-processing for QUALIFY clause
             processedAst = this.postprocessQualify(processedAst, qualifyClause);

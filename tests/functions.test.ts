@@ -154,7 +154,7 @@ WHERE first_name || last_name = 'JohnDoe'
         const sql =
             "SELECT *, (CASE WHEN CURRENT_DATE() > YEAR(CURRENT_DATE) || '-08-01' THEN YEAR(CURRENT_DATE) || YEAR(CURRENT_DATE)+1 ELSE YEAR(CURRENT_DATE)-1 || YEAR(CURRENT_DATE) END)::INT AS cur_season FROM season;";
         const expected = `SELECT *
-     , CAST((CASE WHEN CURRENT_DATE > YEAR(CURRENT_DATE()) || '-08-01' THEN YEAR(CURRENT_DATE()) || YEAR(CURRENT_DATE()) + 1 ELSE YEAR(CURRENT_DATE()) - 1 || YEAR(CURRENT_DATE()) END) AS INT) AS cur_season
+     , (CASE WHEN CURRENT_DATE > YEAR(CURRENT_DATE()) || '-08-01' THEN YEAR(CURRENT_DATE()) || YEAR(CURRENT_DATE()) + 1 ELSE YEAR(CURRENT_DATE()) - 1 || YEAR(CURRENT_DATE()) END)::INT AS cur_season
 FROM season
 ;`;
         const result = await formatSQL(sql);

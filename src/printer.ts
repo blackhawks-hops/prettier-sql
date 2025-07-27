@@ -1519,6 +1519,13 @@ function formatCastExpression(expr: any, statement?: any): string {
         dataType = expr.target || "";
     }
     
+    // Check if this was originally a PostgreSQL-style cast (::)
+    // If so, format it back to :: syntax
+    if (expr.postgresql_cast) {
+        return `${expression}::${dataType.toString().toUpperCase()}`;
+    }
+    
+    // Default to CAST() syntax for regular CAST expressions
     return `CAST(${expression} AS ${dataType.toString().toUpperCase()})`;
 }
 

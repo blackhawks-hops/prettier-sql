@@ -212,7 +212,7 @@ WHERE u.status = 'active'
 
         const expected = `SELECT id
      , name
-     , CAST(created_at AS DATE) AS created_date
+     , created_at::DATE AS created_date
 FROM users
 WHERE status = 'active'
 ;`;
