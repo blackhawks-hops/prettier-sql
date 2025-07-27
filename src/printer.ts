@@ -1484,6 +1484,12 @@ function formatExpressionValue(expr: any, statement?: any): string {
     } else if (expr.type === "aggr_func") {
         // Handle aggregate functions
         return formatAggregationFunction(expr);
+    } else if (expr.type === "expr_list") {
+        // Handle expression lists (e.g., IN clause values)
+        if (Array.isArray(expr.value)) {
+            return `(${expr.value.map((item: any) => formatExpressionValue(item, statement)).join(", ")})`;
+        }
+        return "";
     }
     return expr.value || "";
 }
