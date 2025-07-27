@@ -615,6 +615,41 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for GROUP BY ALL syntax that is not supported by node-sql-parser
+     * Returns an object with the processed text and the GROUP BY ALL occurrences for post-processing
+     */
+    static preprocessGroupByAll(sql: string): {
+        processedText: string;
+        groupByAllOccurrences: Array<{ original: string; placeholder: string }>;
+    } {
+        let processedText = sql;
+        const groupByAllOccurrences: Array<{ original: string; placeholder: string }> = [];
+
+        // Find GROUP BY ALL patterns (case insensitive)
+        const groupByAllRegex = /\bGROUP\s+BY\s+ALL\b/gi;
+        let match;
+
+        while ((match = groupByAllRegex.exec(sql)) !== null) {
+            const original = match[0]; // e.g., "GROUP BY ALL"
+
+            // Create a placeholder that node-sql-parser can handle
+            // We'll use GROUP BY with a dummy column that we can identify later
+            const placeholder = `GROUP BY __GROUP_BY_ALL_${groupByAllOccurrences.length}__`;
+
+            // Replace GROUP BY ALL with our placeholder
+            processedText = processedText.replace(original, placeholder);
+
+            // Store the mapping for post-processing
+            groupByAllOccurrences.push({
+                original,
+                placeholder,
+            });
+        }
+
+        return { processedText, groupByAllOccurrences };
+    }
+
+    /**
      * Apply post-processing for PostgreSQL casting - mark CAST nodes
      */
     static postprocessPostgreSQLCasting(
@@ -1089,6 +1124,64 @@ export class SQLParser {
     }
 
     /**
+     * Apply post-processing for GROUP BY ALL - mark GROUP BY nodes
+     */
+    static postprocessGroupByAll(
+        ast: any,
+        groupByAllOccurrences: Array<{ original: string; placeholder: string }>,
+    ): any {
+        if (!ast || groupByAllOccurrences.length === 0) {
+            return ast;
+        }
+
+        // Recursively traverse the AST and find GROUP BY nodes with our placeholders
+        const processNode = (node: any) => {
+            if (!node || typeof node !== "object") {
+                return;
+            }
+
+            // Handle GROUP BY clauses
+            if (node.groupby && node.groupby.columns && Array.isArray(node.groupby.columns)) {
+                for (let i = 0; i < node.groupby.columns.length; i++) {
+                    const groupByItem = node.groupby.columns[i];
+                    if (groupByItem && groupByItem.type === "column_ref" && groupByItem.column) {
+                        // Check if this is one of our GROUP BY ALL placeholders
+                        for (const occurrence of groupByAllOccurrences) {
+                            const placeholderColumn = occurrence.placeholder.replace("GROUP BY ", "");
+                            if (groupByItem.column === placeholderColumn) {
+                                // Mark this as a GROUP BY ALL
+                                node.groupby = "ALL";
+                                return; // Exit early to avoid further processing
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Recursively process all properties (skip if groupby was converted to "ALL")
+            Object.keys(node).forEach((key) => {
+                if (key === "groupby" && node[key] === "ALL") {
+                    // Skip processing the "ALL" string
+                    return;
+                }
+                if (Array.isArray(node[key])) {
+                    node[key].forEach((item: any) => processNode(item));
+                } else if (typeof node[key] === "object" && node[key] !== null) {
+                    processNode(node[key]);
+                }
+            });
+        };
+
+        if (Array.isArray(ast)) {
+            ast.forEach(processNode);
+        } else {
+            processNode(ast);
+        }
+
+        return ast;
+    }
+
+    /**
      * Parse SQL code into an AST
      */
     static parse(text: string): SQLNode {
@@ -1144,11 +1237,15 @@ export class SQLParser {
                         const { processedText: textAfterGreatestLeast, greatestLeastFunctions } =
                             this.preprocessGreatestLeast(textAfterCustomTypes);
 
+                        // Preprocess GROUP BY ALL syntax
+                        const { processedText: textAfterGroupByAll, groupByAllOccurrences } =
+                            this.preprocessGroupByAll(textAfterGreatestLeast);
+
                         // Preprocess inline comments ONLY for CREATE statements (node-sql-parser needs this)
-                        let textAfterInlineComments = textAfterGreatestLeast;
+                        let textAfterInlineComments = textAfterGroupByAll;
                         let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
                         if (sqlOnly.trim().toUpperCase().startsWith("CREATE")) {
-                            const preprocessResult = this.preprocessInlineComments(textAfterGreatestLeast);
+                            const preprocessResult = this.preprocessInlineComments(textAfterGroupByAll);
                             textAfterInlineComments = preprocessResult.processedText;
                             inlineComments = preprocessResult.inlineComments;
                         }
@@ -1184,6 +1281,9 @@ export class SQLParser {
 
                         // Apply post-processing for GREATEST and LEAST functions
                         processedAst = this.postprocessGreatestLeast(processedAst, greatestLeastFunctions);
+
+                        // Apply post-processing for GROUP BY ALL
+                        processedAst = this.postprocessGroupByAll(processedAst, groupByAllOccurrences);
 
                         // Apply post-processing for custom types
                         processedAst = this.postprocessCustomTypes(processedAst, customTypes);
@@ -1251,15 +1351,19 @@ export class SQLParser {
         const { processedText: textAfterGreatestLeast, greatestLeastFunctions } =
             this.preprocessGreatestLeast(textAfterCustomTypes);
 
+        // Preprocess GROUP BY ALL syntax
+        const { processedText: textAfterGroupByAll, groupByAllOccurrences } =
+            this.preprocessGroupByAll(textAfterGreatestLeast);
+
         // Preprocess inline comments ONLY for CREATE statements WITH ACTUAL inline comments (node-sql-parser needs this)
-        let textAfterInlineComments = textAfterGreatestLeast;
+        let textAfterInlineComments = textAfterGroupByAll;
         let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
         if (cleanText.trim().toUpperCase().startsWith("CREATE")) {
             // Check if there are actual inline comments (comments on same line as SQL content, not standalone)
             // Look for pattern: SQL_content -- comment_text (content after --)
             const hasInlineComments = /\w+[^-\r\n]*--[^\r\n]*\S/.test(cleanText);
             if (hasInlineComments) {
-                const preprocessResult = this.preprocessInlineComments(textAfterGreatestLeast);
+                const preprocessResult = this.preprocessInlineComments(textAfterGroupByAll);
                 textAfterInlineComments = preprocessResult.processedText;
                 inlineComments = preprocessResult.inlineComments;
             }
@@ -1296,6 +1400,9 @@ export class SQLParser {
 
             // Post-processing for GREATEST and LEAST functions
             processedAst = this.postprocessGreatestLeast(processedAst, greatestLeastFunctions);
+
+            // Post-processing for GROUP BY ALL
+            processedAst = this.postprocessGroupByAll(processedAst, groupByAllOccurrences);
 
             // Post-processing for custom types
             processedAst = this.postprocessCustomTypes(processedAst, customTypes);

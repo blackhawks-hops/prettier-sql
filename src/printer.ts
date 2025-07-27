@@ -560,11 +560,21 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
     }
 
     // Format GROUP BY clause
-    if (Array.isArray(ast.groupby?.columns)) {
+    if ((ast.groupby as any) === "ALL") {
+        // Handle GROUP BY ALL
+        parts.push(hardline);
+        parts.push("GROUP BY ALL");
+    } else if (Array.isArray(ast.groupby?.columns)) {
         parts.push(hardline);
         parts.push(`GROUP BY ${ast.groupby.columns.map((item: any) => item.value || item.column || "").join(", ")}`);
     }
 
+    // Format HAVING clause
+    if (ast.having) {
+        parts.push(hardline);
+        parts.push("HAVING");
+        parts.push(formatWhere(ast.having, ast));
+    }
 
     // Format QUALIFY clause (for regular QUALIFY clauses not in comments)
     if (ast.qualify) {
@@ -1471,6 +1481,9 @@ function formatExpressionValue(expr: any, statement?: any): string {
     } else if (expr.type === "cast") {
         // Handle CAST expressions
         return formatCastExpression(expr, statement);
+    } else if (expr.type === "aggr_func") {
+        // Handle aggregate functions
+        return formatAggregationFunction(expr);
     }
     return expr.value || "";
 }
