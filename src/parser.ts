@@ -221,6 +221,7 @@ export class SQLParser {
                 // Find the expression before :: by going backwards and matching parentheses
                 let expressionStart = -1;
                 let depth = 0;
+                let foundMatchingParen = false;
                 
                 // Start from just before the ::
                 for (let i = castStart - 1; i >= 0; i--) {
@@ -231,13 +232,52 @@ export class SQLParser {
                         depth--;
                         if (depth === 0) {
                             // Found the matching opening parenthesis
-                            expressionStart = i;
+                            foundMatchingParen = true;
+                            // Continue looking backwards for the function name or other expression parts
+                            // Look for word characters (function name) before the opening parenthesis
+                            for (let j = i - 1; j >= 0; j--) {
+                                const prevChar = result[j];
+                                if (/[a-zA-Z_]/.test(prevChar)) {
+                                    // Part of function name, continue
+                                    continue;
+                                } else if (/\s|,|=|<|>|\+|\-|\*|\/|\(/.test(prevChar)) {
+                                    // Found expression boundary
+                                    expressionStart = j + 1;
+                                    break;
+                                }
+                                
+                                if (j === 0) {
+                                    expressionStart = 0;
+                                    break;
+                                }
+                            }
                             break;
                         }
-                    } else if (depth === 0 && /\s|,/.test(char)) {
-                        // If we're not inside parentheses and hit whitespace or comma, stop
+                    } else if (depth === 0 && /\s|,|=|<|>|\+|\-|\*|\/|\(/.test(char)) {
+                        // If we're not inside parentheses and hit an operator or boundary, stop
                         expressionStart = i + 1;
                         break;
+                    }
+                    
+                    if (i === 0) {
+                        expressionStart = 0;
+                        break;
+                    }
+                }
+                
+                // If we didn't find parentheses, look for simple word boundaries
+                if (!foundMatchingParen && expressionStart === -1) {
+                    // Look for the start of the expression (word/identifier boundary)
+                    for (let i = castStart - 1; i >= 0; i--) {
+                        const char = result[i];
+                        if (/\s|,|=|<|>|\+|\-|\*|\/|\(/.test(char)) {
+                            expressionStart = i + 1;
+                            break;
+                        }
+                        if (i === 0) {
+                            expressionStart = 0;
+                            break;
+                        }
                     }
                 }
                 
@@ -249,7 +289,6 @@ export class SQLParser {
                     // Create a special placeholder that node-sql-parser can handle
                     // Use CAST() internally but mark it for conversion back to :: syntax
                     const placeholder = `CAST(${expression} AS ${type})`;
-                    const castId = castings.length;
                     
                     result = result.substring(0, expressionStart) + placeholder + result.substring(castEnd);
                     
