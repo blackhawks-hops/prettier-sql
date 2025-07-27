@@ -221,6 +221,28 @@ WHERE status = 'active'
         expect(formatted.trim()).toBe(expected);
     });
 
+    test("PostgreSQL casting in function arguments", async () => {
+        const unformatted = `
+      SELECT team_id, 
+             SUM(is_win::INT) AS total_wins,
+             AVG(points::FLOAT) AS avg_points,
+             COUNT(player_id::BIGINT) AS player_count
+      FROM games 
+      WHERE season = 2023;
+    `;
+
+        const expected = `SELECT team_id
+     , SUM(is_win::INT) AS total_wins
+     , AVG(points::FLOAT) AS avg_points
+     , COUNT(player_id::BIGINT) AS player_count
+FROM games
+WHERE season = 2023
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
     test("RANK and ROW_NUMBER functions", async () => {
         const unformatted = `
       SELECT id, name, RANK() OVER (ORDER BY created_at DESC) AS ranky

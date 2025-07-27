@@ -255,6 +255,23 @@ export class SQLParser {
     } {
         let result = sql;
         const castings: Array<{ original: string; placeholder: string; expression: string; type: string }> = [];
+        
+        // First, handle simple identifier::type patterns (most common case)
+        // This handles cases like "is_win::INT" inside function calls
+        const simplePattern = /\b(\w+)::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/g;
+        
+        result = result.replace(simplePattern, (match, identifier, type) => {
+            const replacement = `CAST(${identifier} AS ${type})`;
+            castings.push({
+                original: match,
+                placeholder: replacement,
+                expression: identifier,
+                type: type
+            });
+            return replacement;
+        });
+        
+        // Then fall back to complex algorithm for more complex cases
         let changed = true;
         
         while (changed) {
