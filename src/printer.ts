@@ -1067,6 +1067,8 @@ function processArg(arg: any, statement?: any): string {
         return formatColumnRef(arg);
     } else if (arg.type === "binary_expr") {
         return formatBinaryExpression(arg, statement);
+    } else if (arg.type === "cast") {
+        return formatCastExpression(arg, statement);
     } else if (arg.type === "number") {
         return arg.value.toString();
     } else if (arg.type === "single_quote_string") {
