@@ -84,14 +84,15 @@ describe("SANDBOX - Manual Testing", () => {
                 successCount++;
                 console.log(`✅ Statement ${i + 1} formatted successfully`);
             } catch (error) {
-                console.error(`❌ Statement ${i + 1} FAILED:`, error.message);
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.error(`❌ Statement ${i + 1} FAILED:`, errorMsg);
                 console.log('\n📋 Problematic statement:');
                 console.log('='.repeat(80));
                 console.log(statement);
                 console.log('='.repeat(80));
                 
                 errorStatement = statement;
-                errorMessage = error.message;
+                errorMessage = errorMsg;
                 break; // Stop at first error for analysis
             }
         }

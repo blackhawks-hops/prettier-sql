@@ -256,9 +256,39 @@ export class SQLParser {
         let result = sql;
         const castings: Array<{ original: string; placeholder: string; expression: string; type: string }> = [];
         
-        // First, handle simple identifier::type patterns (most common case)
-        // This handles cases like "is_win::INT" inside function calls
-        const simplePattern = /\b(\w+)::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/g;
+        // First, handle function calls with casting 
+        // This handles cases like "CONCAT(...)::TYPE" and "LEFT(...)::TYPE"
+        const functionPattern = /\b(\w+\([^()]*(?:\([^()]*\)[^()]*)*\))::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/gi;
+        
+        result = result.replace(functionPattern, (match, functionCall, type) => {
+            const replacement = `CAST(${functionCall} AS ${type})`;
+            castings.push({
+                original: match,
+                placeholder: replacement,
+                expression: functionCall,
+                type: type
+            });
+            return replacement;
+        });
+        
+        // Then handle parenthesized expressions with casting (not function calls)
+        // This handles cases like "(expression)::TYPE" and "(YEAR(...) || YEAR(...))::INT"
+        const parenthesizedPattern = /(?<!\w)(\([^()]*(?:\([^()]*\)[^()]*)*\))::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/gi;
+        
+        result = result.replace(parenthesizedPattern, (match, expression, type) => {
+            const replacement = `CAST(${expression} AS ${type})`;
+            castings.push({
+                original: match,
+                placeholder: replacement,
+                expression: expression,
+                type: type
+            });
+            return replacement;
+        });
+        
+        // Third, handle simple identifiers with optional schema/table prefix
+        // This handles cases like "is_win::INT", "column::int", "table.column::INT"
+        const simplePattern = /\b((?:\w+\.)?\w+)::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/gi;
         
         result = result.replace(simplePattern, (match, identifier, type) => {
             const replacement = `CAST(${identifier} AS ${type})`;
