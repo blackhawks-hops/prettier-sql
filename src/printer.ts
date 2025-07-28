@@ -479,7 +479,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             parts.push([hardline, `INITIALIZE = ${ast.initialize}`]);
         }
 
-        // Add WAREHOUSE parameter  
+        // Add WAREHOUSE parameter
         if (ast.warehouse) {
             parts.push([hardline, `WAREHOUSE = ${ast.warehouse}`]);
         }
@@ -519,7 +519,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
                 withParts.push(item.name.value);
                 if (item.stmt?.ast) {
                     withParts.push(" AS (");
-                    
+
                     // Check if this CTE has a stored QUALIFY clause
                     const storedQualify = SQLParser.getStoredQualify(item.name.value);
                     if (storedQualify) {
@@ -529,7 +529,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
                             cteAst.qualify = storedQualify;
                         }
                     }
-                    
+
                     const cteContent = formatStatement(item.stmt.ast, false);
                     withParts.push(indent([hardline, cteContent]));
                     withParts.push(hardline);
@@ -619,12 +619,12 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
         parts.push(hardline);
         parts.push("QUALIFY ");
         // Format the QUALIFY expression - handle common patterns
-        const qualifyText = typeof ast.qualify === 'string' ? ast.qualify : String(ast.qualify);
+        const qualifyText = typeof ast.qualify === "string" ? ast.qualify : String(ast.qualify);
         const formattedQualify = qualifyText
-            .replace(/\brow_number\(\)/gi, 'ROW_NUMBER()')
-            .replace(/\bover\s*\(/gi, 'OVER (')
-            .replace(/\bpartition\s+by\b/gi, 'PARTITION BY')
-            .replace(/\border\s+by\b/gi, 'ORDER BY')
+            .replace(/\brow_number\(\)/gi, "ROW_NUMBER()")
+            .replace(/\bover\s*\(/gi, "OVER (")
+            .replace(/\bpartition\s+by\b/gi, "PARTITION BY")
+            .replace(/\border\s+by\b/gi, "ORDER BY")
             .replace(/\b(asc|desc)\b/gi, (match: string) => match.toUpperCase());
         parts.push(formattedQualify);
     }
@@ -1192,7 +1192,7 @@ function formatFrom(fromItems: any[]): doc.builders.DocCommand {
         if (tableItem.__table_generator) {
             const params = tableItem.__table_generator.parameters;
             const paramParts: string[] = [];
-            
+
             // Add parameters in consistent order: ROWCOUNT first, then TIMELIMIT
             if (params.ROWCOUNT) {
                 paramParts.push(`ROWCOUNT => ${params.ROWCOUNT}`);
@@ -1200,9 +1200,9 @@ function formatFrom(fromItems: any[]): doc.builders.DocCommand {
             if (params.TIMELIMIT) {
                 paramParts.push(`TIMELIMIT => ${params.TIMELIMIT}`);
             }
-            
-            fromText = `TABLE(GENERATOR(${paramParts.join(', ')}))`;
-            
+
+            fromText = `TABLE(GENERATOR(${paramParts.join(", ")}))`;
+
             if (tableItem.as) {
                 fromText += ` ${tableItem.as}`;
             }
@@ -1229,7 +1229,7 @@ function formatFrom(fromItems: any[]): doc.builders.DocCommand {
             // Split table name and PIVOT clause
             const tableName = pivotMatch[1];
             const pivotClause = pivotMatch[2];
-            
+
             parts.push(tableName);
             parts.push(hardline);
             parts.push(pivotClause);
@@ -1570,7 +1570,7 @@ function formatExpressionValue(expr: any, statement?: any): string {
 function formatCaseExpression(expr: any, statement?: any): string {
     const whenClauses: string[] = [];
     let elseClause: string | null = null;
-    
+
     // Collect WHEN and ELSE clauses from args array
     if (expr.args && Array.isArray(expr.args)) {
         for (const arg of expr.args) {
@@ -1584,42 +1584,42 @@ function formatCaseExpression(expr: any, statement?: any): string {
             }
         }
     }
-    
+
     // Determine if this should be single-line or multi-line
     const isSingleWhen = whenClauses.length === 1 && elseClause;
-    
+
     if (isSingleWhen) {
         // Single WHEN with ELSE: format on one line
         const parts: string[] = ["CASE"];
-        
+
         // Handle CASE expr WHEN ... (simple case)
         if (expr.expr) {
             parts.push(formatExpressionValue(expr.expr, statement));
         }
-        
+
         parts.push(...whenClauses);
         if (elseClause) {
             parts.push(elseClause);
         }
         parts.push("END");
-        
+
         const result = parts.join(" ");
         return expr.parentheses ? `(${result})` : result;
     } else {
         // Multiple WHENs: format with line breaks and indentation
         const parts: string[] = [];
-        
+
         // Start with CASE and first WHEN on same line
         let caseStart = "CASE";
-        
+
         // Handle CASE expr WHEN ... (simple case)
         if (expr.expr) {
             caseStart += ` ${formatExpressionValue(expr.expr, statement)}`;
         }
-        
+
         if (whenClauses.length > 0) {
             parts.push(`${caseStart} ${whenClauses[0]}`);
-            
+
             // Add remaining WHEN clauses with proper indentation
             // Need to align with the first WHEN. The first line is "CASE WHEN", so subsequent lines
             // should have enough spaces to align the WHEN keywords
@@ -1630,15 +1630,15 @@ function formatCaseExpression(expr: any, statement?: any): string {
         } else {
             parts.push(caseStart);
         }
-        
+
         // Add ELSE clause with same indentation as WHEN clauses
         if (elseClause) {
             parts.push(`            ${elseClause}`);
         }
-        
+
         // Add END with same indentation
         parts.push("            END");
-        
+
         const result = parts.join("\n");
         return expr.parentheses ? `(${result})` : result;
     }
@@ -1649,7 +1649,7 @@ function formatCaseExpression(expr: any, statement?: any): string {
  */
 function formatCastExpression(expr: any, statement?: any): string {
     const expression = formatExpressionValue(expr.expr, statement);
-    
+
     // Handle target data type - it's usually an array with the first element containing dataType
     let dataType = "";
     if (Array.isArray(expr.target) && expr.target.length > 0) {
@@ -1659,13 +1659,13 @@ function formatCastExpression(expr: any, statement?: any): string {
     } else {
         dataType = expr.target || "";
     }
-    
+
     // Check if this was originally a PostgreSQL-style cast (::)
     // If so, format it back to :: syntax
     if (expr.postgresql_cast) {
         return `${expression}::${dataType.toString().toUpperCase()}`;
     }
-    
+
     // Default to CAST() syntax for regular CAST expressions
     return `CAST(${expression} AS ${dataType.toString().toUpperCase()})`;
 }

@@ -11,7 +11,8 @@ const options = {
 
 describe("IN syntax formatting", () => {
     test("NOT IN clause from real query", async () => {
-        const sql = "SELECT * FROM hawks_analytics.SEASON_LOP_SAMPLE_STATS ss WHERE ss.super_component NOT IN ('OPA_OFFENSE', 'PENALTIES', 'FACEOFFS')";
+        const sql =
+            "SELECT * FROM hawks_analytics.SEASON_LOP_SAMPLE_STATS ss WHERE ss.super_component NOT IN ('OPA_OFFENSE', 'PENALTIES', 'FACEOFFS')";
         const expected = `SELECT *
 FROM hawks_analytics.SEASON_LOP_SAMPLE_STATS ss
 WHERE ss.super_component NOT IN ('OPA_OFFENSE', 'PENALTIES', 'FACEOFFS')

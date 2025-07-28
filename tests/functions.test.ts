@@ -224,7 +224,7 @@ WHERE total_amount BETWEEN (base_price * 0.8) AND (base_price * 1.2)
         const sql = `SELECT DATE_TRUNC('MONTH', DATEADD(MONTH, seq4(), '2020-01-01'))::date AS first_of_month
         FROM TABLE(GENERATOR(ROWCOUNT => 1000))
         WHERE DATEADD(MONTH, seq4(), '2020-01-01') <= CURRENT_DATE;`;
-        
+
         const expected = `SELECT DATE_TRUNC('MONTH', DATEADD(month, SEQ4(), '2020-01-01'))::DATE AS first_of_month
 FROM TABLE(GENERATOR(ROWCOUNT => 1000))
 WHERE DATEADD(month, SEQ4(), '2020-01-01') <= CURRENT_DATE
@@ -236,7 +236,7 @@ WHERE DATEADD(month, SEQ4(), '2020-01-01') <= CURRENT_DATE
     test("TABLE(GENERATOR()) with ROWCOUNT and TIMELIMIT", async () => {
         const sql = `SELECT seq4(), uniform(1, 10, RANDOM(12)) 
         FROM TABLE(GENERATOR(ROWCOUNT => 10, TIMELIMIT => 60));`;
-        
+
         const expected = `SELECT SEQ4()
      , UNIFORM(1, 10, RANDOM(12))
 FROM TABLE(GENERATOR(ROWCOUNT => 10, TIMELIMIT => 60))
@@ -247,7 +247,7 @@ FROM TABLE(GENERATOR(ROWCOUNT => 10, TIMELIMIT => 60))
 
     test("TABLE(GENERATOR()) simple ROWCOUNT", async () => {
         const sql = `SELECT 'MY_VALUE' as MY_FIELD_NAME FROM TABLE(GENERATOR(rowcount => 5));`;
-        
+
         const expected = `SELECT 'MY_VALUE' AS MY_FIELD_NAME
 FROM TABLE(GENERATOR(ROWCOUNT => 5))
 ;`;

@@ -18,20 +18,20 @@ export class SQLParser {
      * Check if the SQL contains standalone comments before SQL statements
      */
     static hasStandaloneComments(sql: string): boolean {
-        const lines = sql.split('\n');
+        const lines = sql.split("\n");
         let foundComment = false;
         let foundSql = false;
-        
+
         for (const line of lines) {
             const trimmed = line.trim();
-            if (trimmed.startsWith('--') || trimmed.startsWith('/*')) {
+            if (trimmed.startsWith("--") || trimmed.startsWith("/*")) {
                 foundComment = true;
-            } else if (trimmed && !trimmed.startsWith('--') && !trimmed.startsWith('/*')) {
+            } else if (trimmed && !trimmed.startsWith("--") && !trimmed.startsWith("/*")) {
                 foundSql = true;
                 break;
             }
         }
-        
+
         return foundComment && foundSql;
     }
 
@@ -39,25 +39,25 @@ export class SQLParser {
      * Separate standalone comments from SQL statements
      */
     static separateCommentsFromSQL(sql: string): { comments: string[]; sqlStatement: string } {
-        const lines = sql.split('\n');
+        const lines = sql.split("\n");
         const comments: string[] = [];
         const sqlLines: string[] = [];
         let inSqlSection = false;
-        
+
         for (const line of lines) {
             const trimmed = line.trim();
-            
-            if (!inSqlSection && (trimmed.startsWith('--') || trimmed.startsWith('/*') || trimmed === '')) {
+
+            if (!inSqlSection && (trimmed.startsWith("--") || trimmed.startsWith("/*") || trimmed === "")) {
                 comments.push(line);
             } else {
                 inSqlSection = true;
                 sqlLines.push(line);
             }
         }
-        
+
         return {
             comments,
-            sqlStatement: sqlLines.join('\n').trim()
+            sqlStatement: sqlLines.join("\n").trim(),
         };
     }
 
@@ -255,55 +255,58 @@ export class SQLParser {
     } {
         let result = sql;
         const castings: Array<{ original: string; placeholder: string; expression: string; type: string }> = [];
-        
-        // First, handle function calls with casting 
+
+        // First, handle function calls with casting
         // This handles cases like "CONCAT(...)::TYPE" and "LEFT(...)::TYPE"
-        const functionPattern = /\b(\w+\([^()]*(?:\([^()]*\)[^()]*)*\))::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/gi;
-        
+        const functionPattern =
+            /\b(\w+\([^()]*(?:\([^()]*\)[^()]*)*\))::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/gi;
+
         result = result.replace(functionPattern, (match, functionCall, type) => {
             const replacement = `CAST(${functionCall} AS ${type})`;
             castings.push({
                 original: match,
                 placeholder: replacement,
                 expression: functionCall,
-                type: type
+                type: type,
             });
             return replacement;
         });
-        
+
         // Then handle parenthesized expressions with casting (not function calls)
         // This handles cases like "(expression)::TYPE" and "(YEAR(...) || YEAR(...))::INT"
-        const parenthesizedPattern = /(?<!\w)(\([^()]*(?:\([^()]*\)[^()]*)*\))::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/gi;
-        
+        const parenthesizedPattern =
+            /(?<!\w)(\([^()]*(?:\([^()]*\)[^()]*)*\))::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/gi;
+
         result = result.replace(parenthesizedPattern, (match, expression, type) => {
             const replacement = `CAST(${expression} AS ${type})`;
             castings.push({
                 original: match,
                 placeholder: replacement,
                 expression: expression,
-                type: type
+                type: type,
             });
             return replacement;
         });
-        
+
         // Third, handle simple identifiers with optional schema/table prefix
         // This handles cases like "is_win::INT", "column::int", "table.column::INT"
-        const simplePattern = /\b((?:\w+\.)?\w+)::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/gi;
-        
+        const simplePattern =
+            /\b((?:\w+\.)?\w+)::(INT|INTEGER|BIGINT|FLOAT|DOUBLE|DECIMAL|VARCHAR|TEXT|CHAR|BOOLEAN|BOOL|DATE|TIMESTAMP|TIME)\b/gi;
+
         result = result.replace(simplePattern, (match, identifier, type) => {
             const replacement = `CAST(${identifier} AS ${type})`;
             castings.push({
                 original: match,
                 placeholder: replacement,
                 expression: identifier,
-                type: type
+                type: type,
             });
             return replacement;
         });
-        
+
         // Then fall back to complex algorithm for more complex cases
         let changed = true;
-        
+
         while (changed) {
             changed = false;
             // Find :: followed by a type name
@@ -311,27 +314,27 @@ export class SQLParser {
             if (castMatch) {
                 const castStart = castMatch.index!;
                 const type = castMatch[1];
-                
+
                 // Find the expression before :: by going backwards and matching parentheses
                 let expressionStart = -1;
                 let depth = 0;
                 let foundMatchingParen = false;
-                
+
                 // Start from just before the ::
                 let inQuotes = false;
                 for (let i = castStart - 1; i >= 0; i--) {
                     const char = result[i];
-                    
+
                     // Track whether we're inside quotes
                     if (char === "'") {
                         inQuotes = !inQuotes;
                     }
-                    
+
                     if (!inQuotes) {
                         // Only process these characters when not inside quotes
-                        if (char === ')') {
+                        if (char === ")") {
                             depth++;
-                        } else if (char === '(') {
+                        } else if (char === "(") {
                             depth--;
                             if (depth === 0) {
                                 // Found the matching opening parenthesis
@@ -348,7 +351,7 @@ export class SQLParser {
                                         expressionStart = j + 1;
                                         break;
                                     }
-                                    
+
                                     if (j === 0) {
                                         expressionStart = 0;
                                         break;
@@ -362,13 +365,13 @@ export class SQLParser {
                             break;
                         }
                     }
-                    
+
                     if (i === 0) {
                         expressionStart = 0;
                         break;
                     }
                 }
-                
+
                 // If we didn't find parentheses, look for expression boundaries including quoted strings
                 if (!foundMatchingParen && expressionStart === -1) {
                     // Check if we're dealing with a quoted string literal
@@ -400,31 +403,31 @@ export class SQLParser {
                         }
                     }
                 }
-                
+
                 if (expressionStart >= 0) {
                     const expression = result.substring(expressionStart, castStart).trim();
                     const castEnd = castStart + castMatch[0].length;
                     const original = result.substring(expressionStart, castEnd);
-                    
+
                     // Create a special placeholder that node-sql-parser can handle
                     // Use CAST() internally but mark it for conversion back to :: syntax
                     const placeholder = `CAST(${expression} AS ${type})`;
-                    
+
                     result = result.substring(0, expressionStart) + placeholder + result.substring(castEnd);
-                    
+
                     // Store the casting info for post-processing
                     castings.push({
                         original,
                         placeholder,
                         expression,
-                        type
+                        type,
                     });
-                    
+
                     changed = true;
                 }
             }
         }
-        
+
         return { processedText: result, castings };
     }
 
@@ -447,11 +450,11 @@ export class SQLParser {
 
         // Finally, handle top-level QUALIFY clause
         const topLevelResult = this.preprocessSingleQualify(processedText);
-        
+
         return {
             processedText: topLevelResult.processedText,
             qualifyClause: topLevelResult.qualifyClause,
-            castings
+            castings,
         };
     }
 
@@ -461,53 +464,53 @@ export class SQLParser {
     static preprocessQualifyInCTEs(sql: string): string {
         // Clear previous QUALIFY storage
         qualifyStorage.clear();
-        
+
         // Use a more robust approach to find CTE patterns with proper parentheses matching
         const cteNamePattern = /(\w+)\s+AS\s*\(/gi;
         let result = sql;
         let match;
-        
+
         // Reset the regex state
         cteNamePattern.lastIndex = 0;
-        
+
         while ((match = cteNamePattern.exec(sql)) !== null) {
             const cteName = match[1]; // Extract the CTE name
             const cteStart = match[0];
             const startPos = match.index! + cteStart.length;
-            
+
             // Find the matching closing parenthesis
             let depth = 1;
             let pos = startPos;
             let cteEnd = -1;
-            
+
             while (pos < sql.length && depth > 0) {
-                if (sql[pos] === '(') depth++;
-                else if (sql[pos] === ')') depth--;
-                
+                if (sql[pos] === "(") depth++;
+                else if (sql[pos] === ")") depth--;
+
                 if (depth === 0) {
                     cteEnd = pos;
                     break;
                 }
                 pos++;
             }
-            
+
             if (cteEnd !== -1) {
                 const cteContent = sql.substring(startPos, cteEnd);
                 const processedCTE = this.preprocessSingleQualify(cteContent);
-                
+
                 if (processedCTE.qualifyClause) {
                     // Store the QUALIFY clause for later restoration
                     qualifyStorage.set(cteName, processedCTE.qualifyClause);
-                    
+
                     // Replace with just the processed content (no comment)
-                    const fullReplacement = cteStart + processedCTE.processedText + ')';
+                    const fullReplacement = cteStart + processedCTE.processedText + ")";
                     const originalCTE = sql.substring(match.index!, cteEnd + 1);
-                    
+
                     result = result.replace(originalCTE, fullReplacement);
                 }
             }
         }
-        
+
         return result;
     }
 
@@ -552,9 +555,9 @@ export class SQLParser {
             const char = sql[currentPos];
             const remaining = sql.substring(currentPos);
 
-            if (char === '(') {
+            if (char === "(") {
                 depth++;
-            } else if (char === ')') {
+            } else if (char === ")") {
                 depth--;
                 // Check if we're closing the CTE/subquery
                 if (depth < 0) {
@@ -578,15 +581,15 @@ export class SQLParser {
         const match = {
             0: sql.substring(qualifyMatch.index!, qualifyEnd),
             1: sql.substring(qualifyStart, qualifyEnd).trim(),
-            index: qualifyMatch.index
+            index: qualifyMatch.index,
         };
 
         if (match) {
             qualifyClause = match[1].trim();
             // Remove the QUALIFY clause from the SQL to make it parseable
-            processedText = processedText.replace(match[0], '');
+            processedText = processedText.replace(match[0], "");
             // Clean up any extra whitespace
-            processedText = processedText.replace(/\s+/g, ' ').trim();
+            processedText = processedText.replace(/\s+/g, " ").trim();
         }
 
         return { processedText, qualifyClause };
@@ -614,6 +617,16 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL to normalize decimal numbers that start with a dot
+     * Converts .5 to 0.5, etc.
+     */
+    static preprocessDecimalNumbers(sql: string): string {
+        // Only match decimal numbers that start with dot when preceded by operators or whitespace
+        // But NOT when preceded by alphanumeric characters (which would be table.column)
+        return sql.replace(/(?<=^|[\s\(\+\-\*\/\=\<\>\,\;\n\r])(\.\d+)/g, "0$1");
+    }
+
+    /**
      * Preprocess SQL for "CREATE DYNAMIC TABLE" Snowflake dialect
      * Returns an object with the processed text and the dynamic table info for post-processing
      */
@@ -636,14 +649,14 @@ export class SQLParser {
 
         if (startMatch) {
             const tableName = startMatch[1];
-            
+
             // Find the AS keyword to determine where parameters end
             const asIndex = sql.search(/\bAS\s+/i);
             if (asIndex === -1) return { processedText, dynamicTableMatch };
 
             // Extract the parameter section between table name and AS
             const parameterSection = sql.substring(startMatch.index + startMatch[0].length, asIndex).trim();
-            
+
             // Extract TARGET_LAG parameter (optional)
             const targetLagMatch = /TARGET_LAG\s*=\s*'([^']+)'/i.exec(parameterSection);
             const targetLag = targetLagMatch ? targetLagMatch[1] : undefined;
@@ -665,13 +678,13 @@ export class SQLParser {
                 ...(targetLag && { targetLag }),
                 ...(warehouse && { warehouse }),
                 ...(refreshMode && { refreshMode }),
-                ...(initialize && { initialize })
+                ...(initialize && { initialize }),
             };
 
             // Find the complete match from CREATE [OR REPLACE] DYNAMIC TABLE to AS
             const fullMatchRegex = new RegExp(
-                `CREATE\\s+(?:OR\\s+REPLACE\\s+)?DYNAMIC\\s+TABLE\\s+${tableName.replace('.', '\\.')}[\\s\\S]*?AS\\s+`,
-                'i'
+                `CREATE\\s+(?:OR\\s+REPLACE\\s+)?DYNAMIC\\s+TABLE\\s+${tableName.replace(".", "\\.")}[\\s\\S]*?AS\\s+`,
+                "i",
             );
             const fullMatch = fullMatchRegex.exec(sql);
 
@@ -679,10 +692,7 @@ export class SQLParser {
                 // Replace with CREATE [OR REPLACE] VIEW that node-sql-parser can understand
                 const hasOrReplace = /CREATE\s+OR\s+REPLACE/i.test(fullMatch[0]);
                 const createPrefix = hasOrReplace ? "CREATE OR REPLACE VIEW" : "CREATE VIEW";
-                processedText = processedText.replace(
-                    fullMatch[0],
-                    `${createPrefix} ${tableName} AS `
-                );
+                processedText = processedText.replace(fullMatch[0], `${createPrefix} ${tableName} AS `);
             }
         }
 
@@ -708,7 +718,6 @@ export class SQLParser {
             parameters: { [key: string]: string };
         }> = [];
 
-
         // Match TABLE(GENERATOR(...)) with various parameters
         const tableGeneratorRegex = /TABLE\(GENERATOR\(([^)]*)\)\)/gi;
         let match;
@@ -719,7 +728,7 @@ export class SQLParser {
             const parameters: { [key: string]: string } = {};
 
             // Parse parameters like "ROWCOUNT => 1000, TIMELIMIT => 60"
-            const paramPairs = parametersStr.split(',');
+            const paramPairs = parametersStr.split(",");
             for (const pair of paramPairs) {
                 const paramMatch = /\s*(\w+)\s*=>\s*([^,]+)/i.exec(pair.trim());
                 if (paramMatch) {
@@ -730,7 +739,7 @@ export class SQLParser {
 
             // Create a placeholder that node-sql-parser can understand
             const placeholder = `__TABLE_GENERATOR_${placeholderIndex}__`;
-            
+
             // Replace with a simple table reference
             processedText = processedText.replace(fullMatch, placeholder);
 
@@ -738,12 +747,11 @@ export class SQLParser {
             tableGeneratorMatches.push({
                 original: fullMatch,
                 placeholder,
-                parameters
+                parameters,
             });
 
             placeholderIndex++;
         }
-
 
         return { processedText, tableGeneratorMatches };
     }
@@ -849,39 +857,39 @@ export class SQLParser {
      */
     static preprocessPivot(sql: string): {
         processedText: string;
-        pivotOccurrences: Array<{ original: string; placeholder: string; type: 'PIVOT' | 'UNPIVOT' }>;
+        pivotOccurrences: Array<{ original: string; placeholder: string; type: "PIVOT" | "UNPIVOT" }>;
     } {
         let processedText = sql;
-        const pivotOccurrences: Array<{ original: string; placeholder: string; type: 'PIVOT' | 'UNPIVOT' }> = [];
+        const pivotOccurrences: Array<{ original: string; placeholder: string; type: "PIVOT" | "UNPIVOT" }> = [];
 
         // Find PIVOT patterns (including UNPIVOT) - need to handle nested parentheses
         // Process occurrences from end to start to avoid index shifting issues
-        const matches: Array<{ match: RegExpExecArray; original: string; type: 'PIVOT' | 'UNPIVOT' }> = [];
+        const matches: Array<{ match: RegExpExecArray; original: string; type: "PIVOT" | "UNPIVOT" }> = [];
         const pivotStartRegex = /\b(PIVOT|UNPIVOT)\s*\(/gi;
         let match;
 
         // First, collect all matches
         while ((match = pivotStartRegex.exec(sql)) !== null) {
-            const pivotType = match[1].toUpperCase() as 'PIVOT' | 'UNPIVOT';
+            const pivotType = match[1].toUpperCase() as "PIVOT" | "UNPIVOT";
             const startIndex = match.index;
             const openParenIndex = match.index + match[0].length - 1; // Position of opening parenthesis
-            
+
             // Find the matching closing parenthesis
             let depth = 1;
             let pos = openParenIndex + 1;
             let endIndex = -1;
-            
+
             while (pos < sql.length && depth > 0) {
-                if (sql[pos] === '(') depth++;
-                else if (sql[pos] === ')') depth--;
-                
+                if (sql[pos] === "(") depth++;
+                else if (sql[pos] === ")") depth--;
+
                 if (depth === 0) {
                     endIndex = pos;
                     break;
                 }
                 pos++;
             }
-            
+
             if (endIndex !== -1) {
                 const original = sql.substring(startIndex, endIndex + 1);
                 matches.push({ match, original, type: pivotType });
@@ -891,7 +899,7 @@ export class SQLParser {
         // Process matches from end to start to avoid index shifting
         matches.reverse().forEach((matchInfo) => {
             const { original, type } = matchInfo;
-            
+
             // Create a placeholder that node-sql-parser can handle
             // We'll use a simple identifier that we can identify later
             const placeholder = `__PIVOT_${pivotOccurrences.length}__`;
@@ -950,7 +958,7 @@ export class SQLParser {
      */
     static postprocessPostgreSQLCasting(
         ast: any,
-        castings: Array<{ original: string; placeholder: string; expression: string; type: string }>
+        castings: Array<{ original: string; placeholder: string; expression: string; type: string }>,
     ): any {
         if (!ast || castings.length === 0) {
             return ast;
@@ -958,18 +966,18 @@ export class SQLParser {
 
         // Recursively traverse the AST and mark CAST nodes that were originally PostgreSQL casts
         const markPostgreSQLCasts = (node: any) => {
-            if (!node || typeof node !== 'object') return;
+            if (!node || typeof node !== "object") return;
 
-            if (node.type === 'cast') {
+            if (node.type === "cast") {
                 // Mark this CAST node as originally a PostgreSQL cast
                 node.postgresql_cast = true;
             }
 
             // Recursively process all properties
-            Object.keys(node).forEach(key => {
+            Object.keys(node).forEach((key) => {
                 if (Array.isArray(node[key])) {
                     node[key].forEach(markPostgreSQLCasts);
-                } else if (typeof node[key] === 'object') {
+                } else if (typeof node[key] === "object") {
                     markPostgreSQLCasts(node[key]);
                 }
             });
@@ -1040,7 +1048,13 @@ export class SQLParser {
      */
     static postprocessCreateDynamicTable(
         ast: any,
-        dynamicTableMatch: { tableName: string; targetLag?: string; warehouse?: string; refreshMode?: string; initialize?: string } | null
+        dynamicTableMatch: {
+            tableName: string;
+            targetLag?: string;
+            warehouse?: string;
+            refreshMode?: string;
+            initialize?: string;
+        } | null,
     ): any {
         if (!dynamicTableMatch || !ast) {
             return ast;
@@ -1052,7 +1066,7 @@ export class SQLParser {
                 if (stmt.type === "create" && stmt.keyword === "view") {
                     // Convert VIEW back to DYNAMIC TABLE and add the parameters
                     stmt.keyword = "dynamic_table";
-                    
+
                     if (dynamicTableMatch.targetLag) {
                         stmt.target_lag = dynamicTableMatch.targetLag;
                     }
@@ -1096,16 +1110,15 @@ export class SQLParser {
             original: string;
             placeholder: string;
             parameters: { [key: string]: string };
-        }>
+        }>,
     ): any {
         if (!tableGeneratorMatches.length || !ast) {
             return ast;
         }
 
-
         // Recursively process the AST to find and replace placeholders
         const processNode = (node: any): any => {
-            if (!node || typeof node !== 'object') {
+            if (!node || typeof node !== "object") {
                 return node;
             }
 
@@ -1118,16 +1131,16 @@ export class SQLParser {
             for (const key in processed) {
                 if (processed.hasOwnProperty(key)) {
                     const value = processed[key];
-                    
+
                     // Check if this is a string that matches one of our placeholders
-                    if (typeof value === 'string') {
-                        const match = tableGeneratorMatches.find(m => value.includes(m.placeholder));
+                    if (typeof value === "string") {
+                        const match = tableGeneratorMatches.find((m) => value.includes(m.placeholder));
                         if (match) {
                             // Mark this node as a TABLE(GENERATOR()) call
                             processed[key] = value.replace(match.placeholder, match.original);
                             processed.__table_generator = {
                                 parameters: match.parameters,
-                                original: match.original
+                                original: match.original,
                             };
                         }
                     } else {
@@ -1531,7 +1544,7 @@ export class SQLParser {
      */
     static postprocessPivot(
         ast: any,
-        pivotOccurrences: Array<{ original: string; placeholder: string; type: 'PIVOT' | 'UNPIVOT' }>,
+        pivotOccurrences: Array<{ original: string; placeholder: string; type: "PIVOT" | "UNPIVOT" }>,
     ): any {
         if (!ast || pivotOccurrences.length === 0) {
             return ast;
@@ -1551,14 +1564,14 @@ export class SQLParser {
                         if (node[key].includes(occurrence.placeholder)) {
                             // Replace the placeholder with the original PIVOT syntax
                             node[key] = node[key].replace(occurrence.placeholder, occurrence.original);
-                            
+
                             // Mark this node as containing PIVOT syntax
                             if (!node.pivot_info) {
                                 node.pivot_info = [];
                             }
                             node.pivot_info.push({
                                 type: occurrence.type,
-                                original: occurrence.original
+                                original: occurrence.original,
                             });
                         }
                     }
@@ -1674,8 +1687,15 @@ export class SQLParser {
                         // Handle GRANT statement
                         parsedStatements.push(this.parseGrantStatement(sqlOnly));
                     } else {
+                        // Preprocess decimal numbers (normalize .5 to 0.5)
+                        const textAfterDecimalNormalization = this.preprocessDecimalNumbers(sqlOnly);
+
                         // Preprocess QUALIFY clause
-                        const { processedText: textAfterQualify, qualifyClause, castings } = this.preprocessQualify(sqlOnly);
+                        const {
+                            processedText: textAfterQualify,
+                            qualifyClause,
+                            castings,
+                        } = this.preprocessQualify(textAfterDecimalNormalization);
 
                         // Preprocess CREATE OR REPLACE syntax
                         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
@@ -1812,10 +1832,10 @@ export class SQLParser {
         // Handle statements with standalone comments before SQL
         else if (this.hasStandaloneComments(cleanText)) {
             const { comments, sqlStatement } = this.separateCommentsFromSQL(cleanText);
-            
+
             // Parse the SQL statement separately
             let sqlAst: any;
-            
+
             // Check if the SQL part is a GRANT statement
             if (this.isGrantStatement(sqlStatement)) {
                 sqlAst = this.parseGrantStatement(sqlStatement);
@@ -1827,16 +1847,16 @@ export class SQLParser {
                     statement: sqlStatement,
                 };
             }
-            
+
             // Create an AST that includes both comments and SQL
             const combinedAst = [
-                ...comments.map(comment => ({
+                ...comments.map((comment) => ({
                     type: "comment",
                     value: comment,
                 })),
-                sqlAst
+                sqlAst,
             ];
-            
+
             return {
                 type: "sql",
                 text: cleanText,
@@ -1848,8 +1868,15 @@ export class SQLParser {
             };
         }
 
+        // Preprocess decimal numbers (normalize .5 to 0.5)
+        const textAfterDecimalNormalization = this.preprocessDecimalNumbers(cleanText);
+
         // Preprocess QUALIFY clause
-        const { processedText: textAfterQualify, qualifyClause, castings } = this.preprocessQualify(cleanText);
+        const {
+            processedText: textAfterQualify,
+            qualifyClause,
+            castings,
+        } = this.preprocessQualify(textAfterDecimalNormalization);
 
         // Preprocess CREATE OR REPLACE syntax
         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
@@ -1875,12 +1902,10 @@ export class SQLParser {
             this.preprocessGreatestLeast(textAfterCustomTypes);
 
         // Preprocess PIVOT/UNPIVOT syntax
-        const { processedText: textAfterPivot, pivotOccurrences } =
-            this.preprocessPivot(textAfterGreatestLeast);
+        const { processedText: textAfterPivot, pivotOccurrences } = this.preprocessPivot(textAfterGreatestLeast);
 
         // Preprocess GROUP BY ALL syntax
-        const { processedText: textAfterGroupByAll, groupByAllOccurrences } =
-            this.preprocessGroupByAll(textAfterPivot);
+        const { processedText: textAfterGroupByAll, groupByAllOccurrences } = this.preprocessGroupByAll(textAfterPivot);
 
         // Preprocess inline comments ONLY for CREATE statements WITH ACTUAL inline comments (node-sql-parser needs this)
         let textAfterInlineComments = textAfterGroupByAll;
