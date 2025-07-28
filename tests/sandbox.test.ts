@@ -62,6 +62,15 @@ describe("SANDBOX - Manual Testing", () => {
         
         console.log(`📊 Found ${statements.length} statements`);
         
+        // If there's only one statement, print it to the console for debugging
+        if (statements.length === 1) {
+            console.log('\n🔍 Single statement found:');
+            console.log('='.repeat(80));
+            console.log(statements[0]);
+            console.log('='.repeat(80));
+            console.log();
+        }
+        
         let successCount = 0;
         let errorStatement = '';
         let errorMessage = '';
@@ -75,7 +84,7 @@ describe("SANDBOX - Manual Testing", () => {
             try {
                 console.log(`🔍 Testing statement ${i + 1}/${statements.length}: ${statement.substring(0, 60)}...`);
                 
-                await prettier.format(statement, {
+                const formatted = await prettier.format(statement, {
                     plugins: [sqlPlugin],
                     parser: "sql",
                     tabWidth: 4,
@@ -83,6 +92,14 @@ describe("SANDBOX - Manual Testing", () => {
                 
                 successCount++;
                 console.log(`✅ Statement ${i + 1} formatted successfully`);
+                
+                // If there's only one statement, print the formatted result
+                if (statements.length === 1) {
+                    console.log('\n📝 Formatted result:');
+                    console.log('='.repeat(80));
+                    console.log(formatted);
+                    console.log('='.repeat(80));
+                }
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 console.error(`❌ Statement ${i + 1} FAILED:`, errorMsg);

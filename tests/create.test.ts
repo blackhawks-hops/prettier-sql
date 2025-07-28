@@ -366,4 +366,94 @@ primary key (SEASON, LEAGUE_ID_HAWKS, MANPOWER_CODE, ZONE, AREA_NAME, IS_RUSH)
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("CREATE DYNAMIC TABLE with TARGET_LAG and WAREHOUSE", async () => {
+        const unformatted = `
+      CREATE DYNAMIC TABLE hawks_analytics.pick_ownership_history
+      TARGET_LAG = '12 hours'
+      WAREHOUSE = COMPUTE_WH
+      AS
+      SELECT tp.pick_id_hawks
+      , ti.trade_id_hawks
+      , tp.from_team_id_hawks AS team_id_hawks
+      , ti.trade_date AS owned_until_date
+      FROM public.trade_pick tp
+      JOIN public.trade_id ti ON tp.trade_id_hawks = ti.trade_id_hawks;
+    `;
+
+        const expected = `CREATE DYNAMIC TABLE hawks_analytics.pick_ownership_history
+TARGET_LAG = '12 hours'
+WAREHOUSE = COMPUTE_WH
+AS
+SELECT tp.pick_id_hawks
+     , ti.trade_id_hawks
+     , tp.from_team_id_hawks AS team_id_hawks
+     , ti.trade_date AS owned_until_date
+FROM public.trade_pick tp
+JOIN public.trade_id ti ON tp.trade_id_hawks = ti.trade_id_hawks
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("CREATE DYNAMIC TABLE with swapped parameter order", async () => {
+        const unformatted = `
+      CREATE DYNAMIC TABLE hawks_analytics.pick_ownership_history
+      WAREHOUSE = COMPUTE_WH
+      TARGET_LAG = '6 hours'
+      AS
+      SELECT tp.pick_id_hawks
+      FROM public.trade_pick tp;
+    `;
+
+        const expected = `CREATE DYNAMIC TABLE hawks_analytics.pick_ownership_history
+TARGET_LAG = '6 hours'
+WAREHOUSE = COMPUTE_WH
+AS
+SELECT tp.pick_id_hawks
+FROM public.trade_pick tp
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("CREATE DYNAMIC TABLE with only TARGET_LAG", async () => {
+        const unformatted = `
+      CREATE DYNAMIC TABLE hawks_analytics.test_table
+      TARGET_LAG = '1 hour'
+      AS
+      SELECT id FROM users;
+    `;
+
+        const expected = `CREATE DYNAMIC TABLE hawks_analytics.test_table
+TARGET_LAG = '1 hour'
+AS
+SELECT id
+FROM users
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("CREATE DYNAMIC TABLE with only WAREHOUSE", async () => {
+        const unformatted = `
+      CREATE DYNAMIC TABLE hawks_analytics.test_table
+      WAREHOUSE = DATA_WH
+      AS
+      SELECT id FROM users;
+    `;
+
+        const expected = `CREATE DYNAMIC TABLE hawks_analytics.test_table
+WAREHOUSE = DATA_WH
+AS
+SELECT id
+FROM users
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

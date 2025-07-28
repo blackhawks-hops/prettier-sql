@@ -24,6 +24,8 @@ interface CustomCreate extends Create {
     schema?: {
         schema?: Array<{ value: string }>;
     };
+    target_lag?: string;
+    warehouse?: string;
 }
 
 const { join, hardline, indent } = doc.builders;
@@ -447,6 +449,30 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         }
 
         parts.push(" AS");
+        parts.push([hardline, formatSelect(ast.select, false)]);
+    }
+    // Handle dynamic table creation
+    else if ((ast.keyword as string) === "dynamic_table") {
+        parts.push("DYNAMIC TABLE ");
+
+        // Include schema/database name if available
+        if (ast.view && ast.view.db) {
+            parts.push(`${ast.view.db}.${ast.view.view || ""}`);
+        } else if (ast.view && ast.view.view) {
+            parts.push(ast.view.view);
+        }
+
+        // Add TARGET_LAG parameter
+        if (ast.target_lag) {
+            parts.push([hardline, `TARGET_LAG = '${ast.target_lag}'`]);
+        }
+
+        // Add WAREHOUSE parameter  
+        if (ast.warehouse) {
+            parts.push([hardline, `WAREHOUSE = ${ast.warehouse}`]);
+        }
+
+        parts.push([hardline, "AS"]);
         parts.push([hardline, formatSelect(ast.select, false)]);
     }
 

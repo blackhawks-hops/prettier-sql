@@ -614,6 +614,68 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for "CREATE DYNAMIC TABLE" Snowflake dialect
+     * Returns an object with the processed text and the dynamic table info for post-processing
+     */
+    static preprocessCreateDynamicTable(sql: string): {
+        processedText: string;
+        dynamicTableMatch: {
+            tableName: string;
+            targetLag?: string;
+            warehouse?: string;
+        } | null;
+    } {
+        let processedText = sql;
+        let dynamicTableMatch = null;
+
+        // Match CREATE DYNAMIC TABLE with flexible parameter order
+        const dynamicTableStartRegex = /CREATE\s+DYNAMIC\s+TABLE\s+([\w\.]+)/i;
+        const startMatch = dynamicTableStartRegex.exec(sql);
+
+        if (startMatch) {
+            const tableName = startMatch[1];
+            
+            // Find the AS keyword to determine where parameters end
+            const asIndex = sql.search(/\bAS\s+/i);
+            if (asIndex === -1) return { processedText, dynamicTableMatch };
+
+            // Extract the parameter section between table name and AS
+            const parameterSection = sql.substring(startMatch.index + startMatch[0].length, asIndex).trim();
+            
+            // Extract TARGET_LAG parameter (optional)
+            const targetLagMatch = /TARGET_LAG\s*=\s*'([^']+)'/i.exec(parameterSection);
+            const targetLag = targetLagMatch ? targetLagMatch[1] : undefined;
+
+            // Extract WAREHOUSE parameter (optional)
+            const warehouseMatch = /WAREHOUSE\s*=\s*(\w+)/i.exec(parameterSection);
+            const warehouse = warehouseMatch ? warehouseMatch[1] : undefined;
+
+            dynamicTableMatch = {
+                tableName,
+                ...(targetLag && { targetLag }),
+                ...(warehouse && { warehouse })
+            };
+
+            // Find the complete match from CREATE DYNAMIC TABLE to AS
+            const fullMatchRegex = new RegExp(
+                `CREATE\\s+DYNAMIC\\s+TABLE\\s+${tableName.replace('.', '\\.')}[\\s\\S]*?AS\\s+`,
+                'i'
+            );
+            const fullMatch = fullMatchRegex.exec(sql);
+
+            if (fullMatch) {
+                // Replace with CREATE VIEW that node-sql-parser can understand
+                processedText = processedText.replace(
+                    fullMatch[0],
+                    `CREATE VIEW ${tableName} AS `
+                );
+            }
+        }
+
+        return { processedText, dynamicTableMatch };
+    }
+
+    /**
      * Preprocess SQL for DELETE with USING clause
      * Returns an object with the processed text and the using clause for post-processing
      */
@@ -895,6 +957,45 @@ export class SQLParser {
             (ast.keyword === "table" || ast.keyword === "view")
         ) {
             ast.ignore_replace = "replace";
+        }
+
+        return ast;
+    }
+
+    /**
+     * Apply post-processing for CREATE DYNAMIC TABLE statements
+     */
+    static postprocessCreateDynamicTable(
+        ast: any,
+        dynamicTableMatch: { tableName: string; targetLag?: string; warehouse?: string } | null
+    ): any {
+        if (!dynamicTableMatch || !ast) {
+            return ast;
+        }
+
+        if (Array.isArray(ast) && ast.length > 0) {
+            // For array of statements
+            ast.forEach((stmt) => {
+                if (stmt.type === "create" && stmt.keyword === "view") {
+                    // Convert VIEW back to DYNAMIC TABLE and add the parameters
+                    stmt.keyword = "dynamic_table";
+                    if (dynamicTableMatch.targetLag) {
+                        stmt.target_lag = dynamicTableMatch.targetLag;
+                    }
+                    if (dynamicTableMatch.warehouse) {
+                        stmt.warehouse = dynamicTableMatch.warehouse;
+                    }
+                }
+            });
+        } else if (!Array.isArray(ast) && ast.type === "create" && ast.keyword === "view") {
+            // Convert VIEW back to DYNAMIC TABLE and add the parameters
+            ast.keyword = "dynamic_table";
+            if (dynamicTableMatch.targetLag) {
+                ast.target_lag = dynamicTableMatch.targetLag;
+            }
+            if (dynamicTableMatch.warehouse) {
+                ast.warehouse = dynamicTableMatch.warehouse;
+            }
         }
 
         return ast;
@@ -1439,9 +1540,13 @@ export class SQLParser {
                         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
                             this.preprocessCreateOrReplace(textAfterQualify);
 
+                        // Preprocess CREATE DYNAMIC TABLE syntax
+                        const { processedText: textAfterDynamicTable, dynamicTableMatch } =
+                            this.preprocessCreateDynamicTable(textAfterCreateOrReplace);
+
                         // Preprocess DELETE with USING clause
                         const { processedText: textAfterDeleteUsing, usingClause } =
-                            this.preprocessDeleteUsing(textAfterCreateOrReplace);
+                            this.preprocessDeleteUsing(textAfterDynamicTable);
 
                         // Preprocess SQL for custom types (ARRAY and OBJECT)
                         const { processedText: textAfterCustomTypes, customTypes } =
@@ -1481,6 +1586,9 @@ export class SQLParser {
 
                         // Apply post-processing for CREATE OR REPLACE
                         let processedAst = this.postprocessCreateOrReplace(stmtAst, createOrReplaceMatch);
+
+                        // Apply post-processing for CREATE DYNAMIC TABLE
+                        processedAst = this.postprocessCreateDynamicTable(processedAst, dynamicTableMatch);
 
                         // Apply post-processing for PostgreSQL casting
                         processedAst = this.postprocessPostgreSQLCasting(processedAst, castings);
@@ -1599,9 +1707,13 @@ export class SQLParser {
         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
             this.preprocessCreateOrReplace(textAfterQualify);
 
+        // Preprocess CREATE DYNAMIC TABLE syntax
+        const { processedText: textAfterDynamicTable, dynamicTableMatch } =
+            this.preprocessCreateDynamicTable(textAfterCreateOrReplace);
+
         // Preprocess DELETE with USING clause
         const { processedText: textAfterDeleteUsing, usingClause } =
-            this.preprocessDeleteUsing(textAfterCreateOrReplace);
+            this.preprocessDeleteUsing(textAfterDynamicTable);
 
         // Preprocess SQL for custom types (ARRAY and OBJECT)
         const { processedText: textAfterCustomTypes, customTypes } = this.preprocessCustomTypes(textAfterDeleteUsing);
@@ -1645,6 +1757,9 @@ export class SQLParser {
 
             // Post-processing for CREATE OR REPLACE
             let processedAst = this.postprocessCreateOrReplace(ast, createOrReplaceMatch);
+
+            // Post-processing for CREATE DYNAMIC TABLE
+            processedAst = this.postprocessCreateDynamicTable(processedAst, dynamicTableMatch);
 
             // Post-processing for PostgreSQL casting
             processedAst = this.postprocessPostgreSQLCasting(processedAst, castings);
