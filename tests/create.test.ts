@@ -456,4 +456,49 @@ FROM users
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("CREATE DYNAMIC TABLE with refresh_mode and initialize", async () => {
+        const unformatted = `
+      CREATE OR REPLACE DYNAMIC TABLE hawks_analytics.league_conference_division_overrides
+      target_lag = '12 hours' refresh_mode = AUTO initialize = ON_CREATE warehouse = COMPUTE_WH
+      AS
+      SELECT * FROM source_table;
+    `;
+
+        const expected = `CREATE OR REPLACE DYNAMIC TABLE hawks_analytics.league_conference_division_overrides
+TARGET_LAG = '12 hours'
+REFRESH_MODE = AUTO
+INITIALIZE = ON_CREATE
+WAREHOUSE = COMPUTE_WH
+AS
+SELECT *
+FROM source_table
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("CREATE DYNAMIC TABLE with all parameters in different order", async () => {
+        const unformatted = `
+      CREATE DYNAMIC TABLE hawks_analytics.test_table
+      initialize = ON_SCHEDULE warehouse = DATA_WH target_lag = '2 hours' refresh_mode = FULL
+      AS
+      SELECT id, name FROM users;
+    `;
+
+        const expected = `CREATE DYNAMIC TABLE hawks_analytics.test_table
+TARGET_LAG = '2 hours'
+REFRESH_MODE = FULL
+INITIALIZE = ON_SCHEDULE
+WAREHOUSE = DATA_WH
+AS
+SELECT id
+     , name
+FROM users
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

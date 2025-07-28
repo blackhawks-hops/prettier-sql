@@ -26,6 +26,8 @@ interface CustomCreate extends Create {
     };
     target_lag?: string;
     warehouse?: string;
+    refresh_mode?: string;
+    initialize?: string;
 }
 
 const { join, hardline, indent } = doc.builders;
@@ -156,7 +158,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
     parts.push("CREATE ");
 
     // Handle OR REPLACE option
-    if (ast.ignore_replace === "replace") {
+    if (ast.ignore_replace === "replace" || (ast as any).replace === "or replace") {
         parts.push("OR REPLACE ");
     }
 
@@ -465,6 +467,16 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         // Add TARGET_LAG parameter
         if (ast.target_lag) {
             parts.push([hardline, `TARGET_LAG = '${ast.target_lag}'`]);
+        }
+
+        // Add REFRESH_MODE parameter
+        if (ast.refresh_mode) {
+            parts.push([hardline, `REFRESH_MODE = ${ast.refresh_mode}`]);
+        }
+
+        // Add INITIALIZE parameter
+        if (ast.initialize) {
+            parts.push([hardline, `INITIALIZE = ${ast.initialize}`]);
         }
 
         // Add WAREHOUSE parameter  
@@ -842,6 +854,8 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
                 formattedColumn = formatCaseExpression(column.expr, statement);
             } else if (column.expr.type === "cast") {
                 formattedColumn = formatCastExpression(column.expr, statement);
+            } else if (column.expr.type === "single_quote_string") {
+                formattedColumn = `'${column.expr.value}'`;
             } else {
                 formattedColumn = String(column.expr.value || "");
             }
@@ -1174,7 +1188,25 @@ function formatFrom(fromItems: any[]): doc.builders.DocCommand {
         // Use type assertion for the properties we know exist in our actual data
         const tableItem = item as any;
 
-        if (tableItem.table) {
+        // Check if this is a TABLE(GENERATOR()) call
+        if (tableItem.__table_generator) {
+            const params = tableItem.__table_generator.parameters;
+            const paramParts: string[] = [];
+            
+            // Add parameters in consistent order: ROWCOUNT first, then TIMELIMIT
+            if (params.ROWCOUNT) {
+                paramParts.push(`ROWCOUNT => ${params.ROWCOUNT}`);
+            }
+            if (params.TIMELIMIT) {
+                paramParts.push(`TIMELIMIT => ${params.TIMELIMIT}`);
+            }
+            
+            fromText = `TABLE(GENERATOR(${paramParts.join(', ')}))`;
+            
+            if (tableItem.as) {
+                fromText += ` ${tableItem.as}`;
+            }
+        } else if (tableItem.table) {
             // Include database name if provided
             if (tableItem.db) {
                 fromText = `${tableItem.db}.${tableItem.table}`;

@@ -623,13 +623,15 @@ export class SQLParser {
             tableName: string;
             targetLag?: string;
             warehouse?: string;
+            refreshMode?: string;
+            initialize?: string;
         } | null;
     } {
         let processedText = sql;
         let dynamicTableMatch = null;
 
-        // Match CREATE DYNAMIC TABLE with flexible parameter order
-        const dynamicTableStartRegex = /CREATE\s+DYNAMIC\s+TABLE\s+([\w\.]+)/i;
+        // Match CREATE [OR REPLACE] DYNAMIC TABLE with flexible parameter order
+        const dynamicTableStartRegex = /CREATE\s+(?:OR\s+REPLACE\s+)?DYNAMIC\s+TABLE\s+([\w\.]+)/i;
         const startMatch = dynamicTableStartRegex.exec(sql);
 
         if (startMatch) {
@@ -650,29 +652,100 @@ export class SQLParser {
             const warehouseMatch = /WAREHOUSE\s*=\s*(\w+)/i.exec(parameterSection);
             const warehouse = warehouseMatch ? warehouseMatch[1] : undefined;
 
+            // Extract REFRESH_MODE parameter (optional)
+            const refreshModeMatch = /REFRESH_MODE\s*=\s*(\w+)/i.exec(parameterSection);
+            const refreshMode = refreshModeMatch ? refreshModeMatch[1] : undefined;
+
+            // Extract INITIALIZE parameter (optional)
+            const initializeMatch = /INITIALIZE\s*=\s*(\w+)/i.exec(parameterSection);
+            const initialize = initializeMatch ? initializeMatch[1] : undefined;
+
             dynamicTableMatch = {
                 tableName,
                 ...(targetLag && { targetLag }),
-                ...(warehouse && { warehouse })
+                ...(warehouse && { warehouse }),
+                ...(refreshMode && { refreshMode }),
+                ...(initialize && { initialize })
             };
 
-            // Find the complete match from CREATE DYNAMIC TABLE to AS
+            // Find the complete match from CREATE [OR REPLACE] DYNAMIC TABLE to AS
             const fullMatchRegex = new RegExp(
-                `CREATE\\s+DYNAMIC\\s+TABLE\\s+${tableName.replace('.', '\\.')}[\\s\\S]*?AS\\s+`,
+                `CREATE\\s+(?:OR\\s+REPLACE\\s+)?DYNAMIC\\s+TABLE\\s+${tableName.replace('.', '\\.')}[\\s\\S]*?AS\\s+`,
                 'i'
             );
             const fullMatch = fullMatchRegex.exec(sql);
 
             if (fullMatch) {
-                // Replace with CREATE VIEW that node-sql-parser can understand
+                // Replace with CREATE [OR REPLACE] VIEW that node-sql-parser can understand
+                const hasOrReplace = /CREATE\s+OR\s+REPLACE/i.test(fullMatch[0]);
+                const createPrefix = hasOrReplace ? "CREATE OR REPLACE VIEW" : "CREATE VIEW";
                 processedText = processedText.replace(
                     fullMatch[0],
-                    `CREATE VIEW ${tableName} AS `
+                    `${createPrefix} ${tableName} AS `
                 );
             }
         }
 
         return { processedText, dynamicTableMatch };
+    }
+
+    /**
+     * Preprocess SQL for "TABLE(GENERATOR())" Snowflake function
+     * Returns an object with the processed text and the generator info for post-processing
+     */
+    static preprocessTableGenerator(sql: string): {
+        processedText: string;
+        tableGeneratorMatches: Array<{
+            original: string;
+            placeholder: string;
+            parameters: { [key: string]: string };
+        }>;
+    } {
+        let processedText = sql;
+        const tableGeneratorMatches: Array<{
+            original: string;
+            placeholder: string;
+            parameters: { [key: string]: string };
+        }> = [];
+
+
+        // Match TABLE(GENERATOR(...)) with various parameters
+        const tableGeneratorRegex = /TABLE\(GENERATOR\(([^)]*)\)\)/gi;
+        let match;
+        let placeholderIndex = 0;
+
+        while ((match = tableGeneratorRegex.exec(sql)) !== null) {
+            const [fullMatch, parametersStr] = match;
+            const parameters: { [key: string]: string } = {};
+
+            // Parse parameters like "ROWCOUNT => 1000, TIMELIMIT => 60"
+            const paramPairs = parametersStr.split(',');
+            for (const pair of paramPairs) {
+                const paramMatch = /\s*(\w+)\s*=>\s*([^,]+)/i.exec(pair.trim());
+                if (paramMatch) {
+                    const [, paramName, paramValue] = paramMatch;
+                    parameters[paramName.toUpperCase()] = paramValue.trim();
+                }
+            }
+
+            // Create a placeholder that node-sql-parser can understand
+            const placeholder = `__TABLE_GENERATOR_${placeholderIndex}__`;
+            
+            // Replace with a simple table reference
+            processedText = processedText.replace(fullMatch, placeholder);
+
+            // Store the mapping for post-processing
+            tableGeneratorMatches.push({
+                original: fullMatch,
+                placeholder,
+                parameters
+            });
+
+            placeholderIndex++;
+        }
+
+
+        return { processedText, tableGeneratorMatches };
     }
 
     /**
@@ -967,7 +1040,7 @@ export class SQLParser {
      */
     static postprocessCreateDynamicTable(
         ast: any,
-        dynamicTableMatch: { tableName: string; targetLag?: string; warehouse?: string } | null
+        dynamicTableMatch: { tableName: string; targetLag?: string; warehouse?: string; refreshMode?: string; initialize?: string } | null
     ): any {
         if (!dynamicTableMatch || !ast) {
             return ast;
@@ -979,8 +1052,15 @@ export class SQLParser {
                 if (stmt.type === "create" && stmt.keyword === "view") {
                     // Convert VIEW back to DYNAMIC TABLE and add the parameters
                     stmt.keyword = "dynamic_table";
+                    
                     if (dynamicTableMatch.targetLag) {
                         stmt.target_lag = dynamicTableMatch.targetLag;
+                    }
+                    if (dynamicTableMatch.refreshMode) {
+                        stmt.refresh_mode = dynamicTableMatch.refreshMode;
+                    }
+                    if (dynamicTableMatch.initialize) {
+                        stmt.initialize = dynamicTableMatch.initialize;
                     }
                     if (dynamicTableMatch.warehouse) {
                         stmt.warehouse = dynamicTableMatch.warehouse;
@@ -993,12 +1073,73 @@ export class SQLParser {
             if (dynamicTableMatch.targetLag) {
                 ast.target_lag = dynamicTableMatch.targetLag;
             }
+            if (dynamicTableMatch.refreshMode) {
+                ast.refresh_mode = dynamicTableMatch.refreshMode;
+            }
+            if (dynamicTableMatch.initialize) {
+                ast.initialize = dynamicTableMatch.initialize;
+            }
             if (dynamicTableMatch.warehouse) {
                 ast.warehouse = dynamicTableMatch.warehouse;
             }
         }
 
         return ast;
+    }
+
+    /**
+     * Apply post-processing for TABLE(GENERATOR()) function calls
+     */
+    static postprocessTableGenerator(
+        ast: any,
+        tableGeneratorMatches: Array<{
+            original: string;
+            placeholder: string;
+            parameters: { [key: string]: string };
+        }>
+    ): any {
+        if (!tableGeneratorMatches.length || !ast) {
+            return ast;
+        }
+
+
+        // Recursively process the AST to find and replace placeholders
+        const processNode = (node: any): any => {
+            if (!node || typeof node !== 'object') {
+                return node;
+            }
+
+            if (Array.isArray(node)) {
+                return node.map(processNode);
+            }
+
+            // Process all properties of the node
+            const processed = { ...node };
+            for (const key in processed) {
+                if (processed.hasOwnProperty(key)) {
+                    const value = processed[key];
+                    
+                    // Check if this is a string that matches one of our placeholders
+                    if (typeof value === 'string') {
+                        const match = tableGeneratorMatches.find(m => value.includes(m.placeholder));
+                        if (match) {
+                            // Mark this node as a TABLE(GENERATOR()) call
+                            processed[key] = value.replace(match.placeholder, match.original);
+                            processed.__table_generator = {
+                                parameters: match.parameters,
+                                original: match.original
+                            };
+                        }
+                    } else {
+                        processed[key] = processNode(value);
+                    }
+                }
+            }
+
+            return processed;
+        };
+
+        return processNode(ast);
     }
 
     /**
@@ -1544,9 +1685,13 @@ export class SQLParser {
                         const { processedText: textAfterDynamicTable, dynamicTableMatch } =
                             this.preprocessCreateDynamicTable(textAfterCreateOrReplace);
 
+                        // Preprocess TABLE(GENERATOR()) syntax
+                        const { processedText: textAfterTableGenerator, tableGeneratorMatches } =
+                            this.preprocessTableGenerator(textAfterDynamicTable);
+
                         // Preprocess DELETE with USING clause
                         const { processedText: textAfterDeleteUsing, usingClause } =
-                            this.preprocessDeleteUsing(textAfterDynamicTable);
+                            this.preprocessDeleteUsing(textAfterTableGenerator);
 
                         // Preprocess SQL for custom types (ARRAY and OBJECT)
                         const { processedText: textAfterCustomTypes, customTypes } =
@@ -1589,6 +1734,9 @@ export class SQLParser {
 
                         // Apply post-processing for CREATE DYNAMIC TABLE
                         processedAst = this.postprocessCreateDynamicTable(processedAst, dynamicTableMatch);
+
+                        // Apply post-processing for TABLE(GENERATOR())
+                        processedAst = this.postprocessTableGenerator(processedAst, tableGeneratorMatches);
 
                         // Apply post-processing for PostgreSQL casting
                         processedAst = this.postprocessPostgreSQLCasting(processedAst, castings);
@@ -1711,9 +1859,13 @@ export class SQLParser {
         const { processedText: textAfterDynamicTable, dynamicTableMatch } =
             this.preprocessCreateDynamicTable(textAfterCreateOrReplace);
 
+        // Preprocess TABLE(GENERATOR()) syntax
+        const { processedText: textAfterTableGenerator, tableGeneratorMatches } =
+            this.preprocessTableGenerator(textAfterDynamicTable);
+
         // Preprocess DELETE with USING clause
         const { processedText: textAfterDeleteUsing, usingClause } =
-            this.preprocessDeleteUsing(textAfterDynamicTable);
+            this.preprocessDeleteUsing(textAfterTableGenerator);
 
         // Preprocess SQL for custom types (ARRAY and OBJECT)
         const { processedText: textAfterCustomTypes, customTypes } = this.preprocessCustomTypes(textAfterDeleteUsing);
@@ -1760,6 +1912,9 @@ export class SQLParser {
 
             // Post-processing for CREATE DYNAMIC TABLE
             processedAst = this.postprocessCreateDynamicTable(processedAst, dynamicTableMatch);
+
+            // Post-processing for TABLE(GENERATOR())
+            processedAst = this.postprocessTableGenerator(processedAst, tableGeneratorMatches);
 
             // Post-processing for PostgreSQL casting
             processedAst = this.postprocessPostgreSQLCasting(processedAst, castings);
