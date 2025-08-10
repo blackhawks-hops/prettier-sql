@@ -813,6 +813,69 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess SQL for CREATE VIEW with UNION that is not supported by node-sql-parser
+     * Returns an object with the processed text and the union info for post-processing
+     */
+    static preprocessCreateViewUnion(sql: string): {
+        processedText: string;
+        createViewUnionInfo: {
+            originalQuery: string;
+            viewName: string;
+            unionParts: string[];
+        } | null;
+    } {
+        let processedText = sql;
+        let createViewUnionInfo = null;
+
+        // Check if this is a CREATE [OR REPLACE] VIEW statement with UNION
+        const createViewRegex = /^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(\S+)\s+AS\s+(.+)$/is;
+        const createViewMatch = sql.match(createViewRegex);
+
+        if (createViewMatch) {
+            const viewName = createViewMatch[1];
+            const queryPart = createViewMatch[2];
+
+            // Check if the query contains UNION (case insensitive)
+            if (/\bUNION\s+(?:ALL\s+)?/i.test(queryPart)) {
+                // Split on UNION ALL or UNION (preserve the UNION type)
+                const unionSplit = queryPart.split(/\b(UNION\s+(?:ALL\s+)?)/i);
+                
+                if (unionSplit.length > 1) {
+                    // Extract the parts: first SELECT, UNION keyword, second SELECT, etc.
+                    const unionParts: string[] = [];
+                    let isUnionKeyword = false;
+                    
+                    for (let i = 0; i < unionSplit.length; i++) {
+                        const part = unionSplit[i].trim();
+                        if (/^UNION\s+(?:ALL\s+)?$/i.test(part)) {
+                            isUnionKeyword = true;
+                            unionParts.push(part);
+                        } else if (part) {
+                            unionParts.push(part);
+                        }
+                    }
+
+                    if (unionParts.length >= 3) { // First SELECT + UNION + Second SELECT minimum
+                        // Store union info for post-processing
+                        createViewUnionInfo = {
+                            originalQuery: queryPart,
+                            viewName,
+                            unionParts,
+                        };
+
+                        // Create a simple CREATE VIEW with just the first SELECT for node-sql-parser
+                        const isOrReplace = /CREATE\s+OR\s+REPLACE/i.test(sql);
+                        const createPrefix = isOrReplace ? "CREATE OR REPLACE VIEW" : "CREATE VIEW";
+                        processedText = `${createPrefix} ${viewName} AS ${unionParts[0]}`;
+                    }
+                }
+            }
+        }
+
+        return { processedText, createViewUnionInfo };
+    }
+
+    /**
      * Preprocess SQL for GREATEST and LEAST functions that are not supported by node-sql-parser
      * Returns an object with the processed text and the function calls for post-processing
      */
@@ -1651,6 +1714,53 @@ export class SQLParser {
     }
 
     /**
+     * Apply post-processing for CREATE VIEW with UNION
+     */
+    static postprocessCreateViewUnion(
+        ast: any,
+        createViewUnionInfo: {
+            originalQuery: string;
+            viewName: string;
+            unionParts: string[];
+        } | null,
+    ): any {
+        if (!ast || !createViewUnionInfo) {
+            return ast;
+        }
+
+        // Handle both single statement and array of statements
+        const processStatement = (stmt: any) => {
+            if (stmt.type === "create" && stmt.keyword === "view") {
+                // Parse the complete UNION query as one statement
+                try {
+                    // Apply the same preprocessing that was applied to the original query
+                    // This ensures CTEs and other constructs are handled properly
+                    const { processedText: preprocessedQuery } = SQLParser.preprocessQualify(createViewUnionInfo.originalQuery);
+                    
+                    const fullUnionAst = SQLParser.parser.astify(preprocessedQuery);
+                    
+                    // Replace the simplified query with the complete UNION query AST
+                    // If astify returns an array, take the first element
+                    stmt.select = Array.isArray(fullUnionAst) ? fullUnionAst[0] : fullUnionAst;
+                    
+                    
+                } catch (error) {
+                    console.warn("Could not parse CREATE VIEW UNION, keeping simplified version:", error.message);
+                    // Keep the existing simplified version if parsing fails
+                }
+            }
+        };
+
+        if (Array.isArray(ast)) {
+            ast.forEach(processStatement);
+        } else {
+            processStatement(ast);
+        }
+
+        return ast;
+    }
+
+    /**
      * Parse SQL code into an AST
      */
     static parse(text: string): SQLNode {
@@ -1729,11 +1839,15 @@ export class SQLParser {
                         const { processedText: textAfterGroupByAll, groupByAllOccurrences } =
                             this.preprocessGroupByAll(textAfterPivot);
 
+                        // Preprocess CREATE VIEW with UNION syntax
+                        const { processedText: textAfterCreateViewUnion, createViewUnionInfo } =
+                            this.preprocessCreateViewUnion(textAfterGroupByAll);
+
                         // Preprocess inline comments ONLY for CREATE statements (node-sql-parser needs this)
-                        let textAfterInlineComments = textAfterGroupByAll;
+                        let textAfterInlineComments = textAfterCreateViewUnion;
                         let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
                         if (sqlOnly.trim().toUpperCase().startsWith("CREATE")) {
-                            const preprocessResult = this.preprocessInlineComments(textAfterGroupByAll);
+                            const preprocessResult = this.preprocessInlineComments(textAfterCreateViewUnion);
                             textAfterInlineComments = preprocessResult.processedText;
                             inlineComments = preprocessResult.inlineComments;
                         }
@@ -1778,6 +1892,9 @@ export class SQLParser {
 
                         // Apply post-processing for GROUP BY ALL
                         processedAst = this.postprocessGroupByAll(processedAst, groupByAllOccurrences);
+
+                        // Apply post-processing for CREATE VIEW with UNION
+                        processedAst = this.postprocessCreateViewUnion(processedAst, createViewUnionInfo);
 
                         // Apply post-processing for PIVOT/UNPIVOT
                         processedAst = this.postprocessPivot(processedAst, pivotOccurrences);
@@ -1907,15 +2024,19 @@ export class SQLParser {
         // Preprocess GROUP BY ALL syntax
         const { processedText: textAfterGroupByAll, groupByAllOccurrences } = this.preprocessGroupByAll(textAfterPivot);
 
+        // Preprocess CREATE VIEW with UNION syntax
+        const { processedText: textAfterCreateViewUnion, createViewUnionInfo } =
+            this.preprocessCreateViewUnion(textAfterGroupByAll);
+
         // Preprocess inline comments ONLY for CREATE statements WITH ACTUAL inline comments (node-sql-parser needs this)
-        let textAfterInlineComments = textAfterGroupByAll;
+        let textAfterInlineComments = textAfterCreateViewUnion;
         let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
         if (cleanText.trim().toUpperCase().startsWith("CREATE")) {
             // Check if there are actual inline comments (comments on same line as SQL content, not standalone)
             // Look for pattern: SQL_content -- comment_text (content after --)
             const hasInlineComments = /\w+[^-\r\n]*--[^\r\n]*\S/.test(cleanText);
             if (hasInlineComments) {
-                const preprocessResult = this.preprocessInlineComments(textAfterGroupByAll);
+                const preprocessResult = this.preprocessInlineComments(textAfterCreateViewUnion);
                 textAfterInlineComments = preprocessResult.processedText;
                 inlineComments = preprocessResult.inlineComments;
             }
@@ -1961,6 +2082,9 @@ export class SQLParser {
 
             // Post-processing for GROUP BY ALL
             processedAst = this.postprocessGroupByAll(processedAst, groupByAllOccurrences);
+
+            // Post-processing for CREATE VIEW with UNION
+            processedAst = this.postprocessCreateViewUnion(processedAst, createViewUnionInfo);
 
             // Post-processing for PIVOT/UNPIVOT
             processedAst = this.postprocessPivot(processedAst, pivotOccurrences);
