@@ -813,66 +813,46 @@ export class SQLParser {
     }
 
     /**
-     * Preprocess SQL for CREATE VIEW with UNION that is not supported by node-sql-parser
-     * Returns an object with the processed text and the union info for post-processing
+     * Preprocess SQL for CREATE VIEW by separating the CREATE part from the query
+     * This allows complex queries with CTEs and UNIONs to be processed as standalone SELECTs
      */
-    static preprocessCreateViewUnion(sql: string): {
+    static preprocessCreateView(sql: string, originalSql?: string): {
         processedText: string;
-        createViewUnionInfo: {
-            originalQuery: string;
-            viewName: string;
-            unionParts: string[];
+        createViewInfo: {
+            createPart: string;
+            queryPart: string;
+            hasOrReplace: boolean;
         } | null;
     } {
         let processedText = sql;
-        let createViewUnionInfo = null;
+        let createViewInfo = null;
 
-        // Check if this is a CREATE [OR REPLACE] VIEW statement with UNION
-        const createViewRegex = /^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(\S+)\s+AS\s+(.+)$/is;
+        // Check if this is specifically a CREATE [OR REPLACE] VIEW statement
+        // Must contain "VIEW" keyword and "AS" keyword, but not "DYNAMIC TABLE"
+        const createViewRegex = /^(CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+\S+\s+AS)\s+(.+)$/is;
         const createViewMatch = sql.match(createViewRegex);
-
-        if (createViewMatch) {
-            const viewName = createViewMatch[1];
+        
+        // Make sure this is actually a VIEW statement and not any other CREATE type
+        if (createViewMatch && /\bVIEW\b/i.test(sql) && !/\bDYNAMIC\s+TABLE\b/i.test(sql)) {
+            const createPart = createViewMatch[1];
             const queryPart = createViewMatch[2];
 
-            // Check if the query contains UNION (case insensitive)
-            if (/\bUNION\s+(?:ALL\s+)?/i.test(queryPart)) {
-                // Split on UNION ALL or UNION (preserve the UNION type)
-                const unionSplit = queryPart.split(/\b(UNION\s+(?:ALL\s+)?)/i);
-                
-                if (unionSplit.length > 1) {
-                    // Extract the parts: first SELECT, UNION keyword, second SELECT, etc.
-                    const unionParts: string[] = [];
-                    let isUnionKeyword = false;
-                    
-                    for (let i = 0; i < unionSplit.length; i++) {
-                        const part = unionSplit[i].trim();
-                        if (/^UNION\s+(?:ALL\s+)?$/i.test(part)) {
-                            isUnionKeyword = true;
-                            unionParts.push(part);
-                        } else if (part) {
-                            unionParts.push(part);
-                        }
-                    }
+            // Check for OR REPLACE in the original SQL if available, otherwise use processed SQL
+            const sqlToCheck = originalSql || sql;
+            const hasOrReplace = /CREATE\s+OR\s+REPLACE\s+VIEW/i.test(sqlToCheck);
 
-                    if (unionParts.length >= 3) { // First SELECT + UNION + Second SELECT minimum
-                        // Store union info for post-processing
-                        createViewUnionInfo = {
-                            originalQuery: queryPart,
-                            viewName,
-                            unionParts,
-                        };
+            // Store the parts for post-processing
+            createViewInfo = {
+                createPart,
+                queryPart,
+                hasOrReplace,
+            };
 
-                        // Create a simple CREATE VIEW with just the first SELECT for node-sql-parser
-                        const isOrReplace = /CREATE\s+OR\s+REPLACE/i.test(sql);
-                        const createPrefix = isOrReplace ? "CREATE OR REPLACE VIEW" : "CREATE VIEW";
-                        processedText = `${createPrefix} ${viewName} AS ${unionParts[0]}`;
-                    }
-                }
-            }
+            // Process just the query part as a standalone SELECT
+            processedText = queryPart;
         }
 
-        return { processedText, createViewUnionInfo };
+        return { processedText, createViewInfo };
     }
 
     /**
@@ -1714,50 +1694,50 @@ export class SQLParser {
     }
 
     /**
-     * Apply post-processing for CREATE VIEW with UNION
+     * Apply post-processing for CREATE VIEW by reconstructing the CREATE statement
      */
-    static postprocessCreateViewUnion(
+    static postprocessCreateView(
         ast: any,
-        createViewUnionInfo: {
-            originalQuery: string;
-            viewName: string;
-            unionParts: string[];
+        createViewInfo: {
+            createPart: string;
+            queryPart: string;
+            hasOrReplace: boolean;
         } | null,
     ): any {
-        if (!ast || !createViewUnionInfo) {
+        if (!ast || !createViewInfo) {
             return ast;
         }
 
-        // Handle both single statement and array of statements
-        const processStatement = (stmt: any) => {
-            if (stmt.type === "create" && stmt.keyword === "view") {
-                // Parse the complete UNION query as one statement
-                try {
-                    // Apply the same preprocessing that was applied to the original query
-                    // This ensures CTEs and other constructs are handled properly
-                    const { processedText: preprocessedQuery } = SQLParser.preprocessQualify(createViewUnionInfo.originalQuery);
-                    
-                    const fullUnionAst = SQLParser.parser.astify(preprocessedQuery);
-                    
-                    // Replace the simplified query with the complete UNION query AST
-                    // If astify returns an array, take the first element
-                    stmt.select = Array.isArray(fullUnionAst) ? fullUnionAst[0] : fullUnionAst;
-                    
-                    
-                } catch (error) {
-                    console.warn("Could not parse CREATE VIEW UNION, keeping simplified version:", error.message);
-                    // Keep the existing simplified version if parsing fails
-                }
-            }
+        // The AST should be the parsed SELECT query, we need to wrap it in a CREATE VIEW structure
+        const selectAst = Array.isArray(ast) ? ast[0] : ast;
+        
+        // Create the CREATE VIEW AST structure
+        const createViewAst = {
+            type: "create",
+            keyword: "view",
+            replace: createViewInfo.hasOrReplace ? "or replace" : undefined,
+            view: this.parseViewName(createViewInfo.createPart),
+            select: selectAst,
         };
 
-        if (Array.isArray(ast)) {
-            ast.forEach(processStatement);
-        } else {
-            processStatement(ast);
-        }
+        return createViewAst;
+    }
 
-        return ast;
+    /**
+     * Extract view name from CREATE VIEW part
+     */
+    static parseViewName(createPart: string): { view: string; db?: string } {
+        const viewNameMatch = createPart.match(/VIEW\s+(\S+)/i);
+        if (viewNameMatch) {
+            const fullName = viewNameMatch[1];
+            if (fullName.includes('.')) {
+                const [db, view] = fullName.split('.');
+                return { db, view };
+            } else {
+                return { view: fullName };
+            }
+        }
+        return { view: "unknown_view" };
     }
 
     /**
@@ -1811,9 +1791,13 @@ export class SQLParser {
                         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
                             this.preprocessCreateOrReplace(textAfterQualify);
 
+                        // Preprocess CREATE VIEW by separating CREATE part from query (must be BEFORE DYNAMIC TABLE)
+                        const { processedText: textAfterCreateView, createViewInfo } =
+                            this.preprocessCreateView(textAfterCreateOrReplace, sqlOnly);
+
                         // Preprocess CREATE DYNAMIC TABLE syntax
                         const { processedText: textAfterDynamicTable, dynamicTableMatch } =
-                            this.preprocessCreateDynamicTable(textAfterCreateOrReplace);
+                            this.preprocessCreateDynamicTable(textAfterCreateView);
 
                         // Preprocess TABLE(GENERATOR()) syntax
                         const { processedText: textAfterTableGenerator, tableGeneratorMatches } =
@@ -1839,15 +1823,13 @@ export class SQLParser {
                         const { processedText: textAfterGroupByAll, groupByAllOccurrences } =
                             this.preprocessGroupByAll(textAfterPivot);
 
-                        // Preprocess CREATE VIEW with UNION syntax
-                        const { processedText: textAfterCreateViewUnion, createViewUnionInfo } =
-                            this.preprocessCreateViewUnion(textAfterGroupByAll);
-
                         // Preprocess inline comments ONLY for CREATE statements (node-sql-parser needs this)
-                        let textAfterInlineComments = textAfterCreateViewUnion;
+                        let textAfterInlineComments = textAfterGroupByAll;
                         let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
-                        if (sqlOnly.trim().toUpperCase().startsWith("CREATE")) {
-                            const preprocessResult = this.preprocessInlineComments(textAfterCreateViewUnion);
+                        if (sqlOnly.trim().toUpperCase().startsWith("CREATE") && !createViewInfo) {
+                            // Only preprocess inline comments if we're not processing a CREATE VIEW
+                            // (CREATE VIEW queries are now processed as standalone SELECTs)
+                            const preprocessResult = this.preprocessInlineComments(textAfterCreateView);
                             textAfterInlineComments = preprocessResult.processedText;
                             inlineComments = preprocessResult.inlineComments;
                         }
@@ -1865,6 +1847,9 @@ export class SQLParser {
 
                         // Apply post-processing for CREATE OR REPLACE
                         let processedAst = this.postprocessCreateOrReplace(stmtAst, createOrReplaceMatch);
+
+                        // Apply post-processing for CREATE VIEW (must be BEFORE DYNAMIC TABLE)
+                        processedAst = this.postprocessCreateView(processedAst, createViewInfo);
 
                         // Apply post-processing for CREATE DYNAMIC TABLE
                         processedAst = this.postprocessCreateDynamicTable(processedAst, dynamicTableMatch);
@@ -1893,8 +1878,6 @@ export class SQLParser {
                         // Apply post-processing for GROUP BY ALL
                         processedAst = this.postprocessGroupByAll(processedAst, groupByAllOccurrences);
 
-                        // Apply post-processing for CREATE VIEW with UNION
-                        processedAst = this.postprocessCreateViewUnion(processedAst, createViewUnionInfo);
 
                         // Apply post-processing for PIVOT/UNPIVOT
                         processedAst = this.postprocessPivot(processedAst, pivotOccurrences);
@@ -1999,9 +1982,13 @@ export class SQLParser {
         const { processedText: textAfterCreateOrReplace, createOrReplaceMatch } =
             this.preprocessCreateOrReplace(textAfterQualify);
 
+        // Preprocess CREATE VIEW by separating CREATE part from query (must be BEFORE DYNAMIC TABLE)
+        const { processedText: textAfterCreateView, createViewInfo } =
+            this.preprocessCreateView(textAfterCreateOrReplace, cleanText);
+
         // Preprocess CREATE DYNAMIC TABLE syntax
         const { processedText: textAfterDynamicTable, dynamicTableMatch } =
-            this.preprocessCreateDynamicTable(textAfterCreateOrReplace);
+            this.preprocessCreateDynamicTable(textAfterCreateView);
 
         // Preprocess TABLE(GENERATOR()) syntax
         const { processedText: textAfterTableGenerator, tableGeneratorMatches } =
@@ -2024,19 +2011,16 @@ export class SQLParser {
         // Preprocess GROUP BY ALL syntax
         const { processedText: textAfterGroupByAll, groupByAllOccurrences } = this.preprocessGroupByAll(textAfterPivot);
 
-        // Preprocess CREATE VIEW with UNION syntax
-        const { processedText: textAfterCreateViewUnion, createViewUnionInfo } =
-            this.preprocessCreateViewUnion(textAfterGroupByAll);
-
         // Preprocess inline comments ONLY for CREATE statements WITH ACTUAL inline comments (node-sql-parser needs this)
-        let textAfterInlineComments = textAfterCreateViewUnion;
+        let textAfterInlineComments = textAfterGroupByAll;
         let inlineComments: Array<{ original: string; placeholder: string; comment: string }> = [];
-        if (cleanText.trim().toUpperCase().startsWith("CREATE")) {
+        if (cleanText.trim().toUpperCase().startsWith("CREATE") && !createViewInfo) {
+            // Only preprocess inline comments if we're not processing a CREATE VIEW
             // Check if there are actual inline comments (comments on same line as SQL content, not standalone)
             // Look for pattern: SQL_content -- comment_text (content after --)
             const hasInlineComments = /\w+[^-\r\n]*--[^\r\n]*\S/.test(cleanText);
             if (hasInlineComments) {
-                const preprocessResult = this.preprocessInlineComments(textAfterCreateViewUnion);
+                const preprocessResult = this.preprocessInlineComments(textAfterCreateView);
                 textAfterInlineComments = preprocessResult.processedText;
                 inlineComments = preprocessResult.inlineComments;
             }
@@ -2055,6 +2039,9 @@ export class SQLParser {
 
             // Post-processing for CREATE OR REPLACE
             let processedAst = this.postprocessCreateOrReplace(ast, createOrReplaceMatch);
+
+            // Post-processing for CREATE VIEW (must be BEFORE DYNAMIC TABLE)
+            processedAst = this.postprocessCreateView(processedAst, createViewInfo);
 
             // Post-processing for CREATE DYNAMIC TABLE
             processedAst = this.postprocessCreateDynamicTable(processedAst, dynamicTableMatch);
@@ -2083,8 +2070,6 @@ export class SQLParser {
             // Post-processing for GROUP BY ALL
             processedAst = this.postprocessGroupByAll(processedAst, groupByAllOccurrences);
 
-            // Post-processing for CREATE VIEW with UNION
-            processedAst = this.postprocessCreateViewUnion(processedAst, createViewUnionInfo);
 
             // Post-processing for PIVOT/UNPIVOT
             processedAst = this.postprocessPivot(processedAst, pivotOccurrences);
