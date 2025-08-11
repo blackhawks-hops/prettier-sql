@@ -223,11 +223,11 @@ WHERE status = 'active'
 
     test("PostgreSQL casting in function arguments", async () => {
         const unformatted = `
-      SELECT team_id, 
+      SELECT team_id,
              SUM(is_win::INT) AS total_wins,
              AVG(points::FLOAT) AS avg_points,
              COUNT(player_id::BIGINT) AS player_count
-      FROM games 
+      FROM games
       WHERE season = 2023;
     `;
 
@@ -421,7 +421,7 @@ JOIN latest_version lv USING(list_id, list_version_id)
      , email
 FROM users
 WHERE status = 'active'
-  AND (is_verified = true OR is_premium = true)
+  AND (is_verified = TRUE OR is_premium = TRUE)
 ;`;
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);

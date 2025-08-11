@@ -319,7 +319,12 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                             columnDefs.push(`'${def.default_val.value}'`);
                         } else if (def.default_val.value && def.default_val.value.value) {
                             // For structured values
-                            columnDefs.push(String(def.default_val.value.value));
+                            if (typeof def.default_val.value.value === "object" && def.default_val.value.value.type === "bool") {
+                                // Handle boolean objects that ended up in nested structure
+                                columnDefs.push(def.default_val.value.value.value ? "TRUE" : "FALSE");
+                            } else {
+                                columnDefs.push(String(def.default_val.value.value));
+                            }
                         } else {
                             // Fallback
                             columnDefs.push(String(def.default_val.value || ""));
@@ -855,7 +860,14 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
             } else if (column.expr.type === "cast") {
                 formattedColumn = formatCastExpression(column.expr, statement);
             } else if (column.expr.type === "single_quote_string") {
-                formattedColumn = `'${column.expr.value}'`;
+                // Handle boolean objects that ended up as string literals
+                if (typeof column.expr.value === "object" && column.expr.value.type === "bool") {
+                    formattedColumn = column.expr.value.value ? "TRUE" : "FALSE";
+                } else {
+                    formattedColumn = `'${column.expr.value}'`;
+                }
+            } else if (column.expr.type === "bool") {
+                formattedColumn = column.expr.value ? "TRUE" : "FALSE";
             } else {
                 formattedColumn = String(column.expr.value || "");
             }
@@ -1122,7 +1134,12 @@ function processArg(arg: any, statement?: any): string {
     } else if (arg.type === "number") {
         return arg.value.toString();
     } else if (arg.type === "single_quote_string") {
-        return `'${arg.value}'`;
+        // Handle boolean objects that ended up as string literals
+        if (typeof arg.value === "object" && arg.value.type === "bool") {
+            return arg.value.value ? "TRUE" : "FALSE";
+        } else {
+            return `'${arg.value}'`;
+        }
     }
     return arg.distinct ? `DISTINCT ${arg.value || ""}` : arg.value || "";
 }
@@ -1531,9 +1548,14 @@ function formatExpressionValue(expr: any, statement?: any): string {
         }
         return processArg(expr, statement); // Use processArg to handle all function cases
     } else if (expr.type === "single_quote_string") {
-        return `'${expr.value}'`;
+        // Handle boolean objects that ended up as string literals
+        if (typeof expr.value === "object" && expr.value.type === "bool") {
+            return expr.value.value ? "TRUE" : "FALSE";
+        } else {
+            return `'${expr.value}'`;
+        }
     } else if (expr.type === "bool") {
-        return expr.value ? "true" : "false";
+        return expr.value ? "TRUE" : "FALSE";
     } else if (expr.type === "unary_expr") {
         // Handle unary expressions like NOT, +, -, etc.
         const operator = expr.operator?.toUpperCase() || "";

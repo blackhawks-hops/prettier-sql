@@ -784,6 +784,47 @@ export class SQLParser {
     }
 
     /**
+     * Preprocess boolean literals (TRUE/FALSE) because node-sql-parser doesn't handle FALSE consistently
+     * Returns an object with the processed text and the boolean literals for post-processing
+     */
+    static preprocessBooleanLiterals(sql: string): {
+        processedText: string;
+        booleanLiterals: Array<{ original: string; placeholder: string; value: boolean }>;
+    } {
+        let processedText = sql;
+        const booleanLiterals: Array<{ original: string; placeholder: string; value: boolean }> = [];
+
+        // Replace standalone FALSE and TRUE literals with placeholders
+        // Use word boundaries to avoid matching parts of words
+        const falsePattern = /\bFALSE\b/gi;
+        const truePattern = /\bTRUE\b/gi;
+
+        // Process FALSE literals
+        processedText = processedText.replace(falsePattern, (match) => {
+            const placeholder = `'__BOOLEAN_FALSE_${booleanLiterals.length}__'`;
+            booleanLiterals.push({
+                original: match,
+                placeholder: placeholder,
+                value: false,
+            });
+            return placeholder;
+        });
+
+        // Process TRUE literals
+        processedText = processedText.replace(truePattern, (match) => {
+            const placeholder = `'__BOOLEAN_TRUE_${booleanLiterals.length}__'`;
+            booleanLiterals.push({
+                original: match,
+                placeholder: placeholder,
+                value: true,
+            });
+            return placeholder;
+        });
+
+        return { processedText, booleanLiterals };
+    }
+
+    /**
      * Preprocess SQL for array index syntax like SPLIT(x)[0]
      * Returns an object with the processed text and the array accesses for post-processing
      */
@@ -1033,6 +1074,52 @@ export class SQLParser {
         }
 
         return ast;
+    }
+
+    /**
+     * Postprocess the AST to restore boolean literals (TRUE/FALSE)
+     */
+    static postprocessBooleanLiterals(
+        ast: any,
+        booleanLiterals: Array<{ original: string; placeholder: string; value: boolean }>
+    ): any {
+        if (!ast || booleanLiterals.length === 0) return ast;
+
+        // Function to recursively traverse and replace boolean literal placeholders
+        function replaceBooleanPlaceholders(node: any): any {
+            if (!node) return node;
+
+            if (typeof node === "string") {
+                // Check if this string is a boolean literal placeholder
+                for (const booleanLiteral of booleanLiterals) {
+                    const placeholderWithoutQuotes = booleanLiteral.placeholder.slice(1, -1);
+                    if (node === placeholderWithoutQuotes || node === booleanLiteral.placeholder) {
+                        // Return a proper boolean node structure
+                        return {
+                            type: "bool",
+                            value: booleanLiteral.value,
+                        };
+                    }
+                }
+                return node;
+            }
+
+            if (Array.isArray(node)) {
+                return node.map(replaceBooleanPlaceholders);
+            }
+
+            if (typeof node === "object") {
+                const result: any = {};
+                for (const key in node) {
+                    result[key] = replaceBooleanPlaceholders(node[key]);
+                }
+                return result;
+            }
+
+            return node;
+        }
+
+        return replaceBooleanPlaceholders(ast);
     }
 
     /**
@@ -1838,9 +1925,12 @@ export class SQLParser {
                         const { processedText: textAfterBlockComments, blockComments } =
                             this.preprocessBlockComments(textAfterInlineComments);
 
+                        // Preprocess boolean literals (node-sql-parser doesn't handle FALSE consistently)
+                        const { processedText: textAfterBooleans, booleanLiterals } = this.preprocessBooleanLiterals(textAfterBlockComments);
+
                         // Preprocess array index syntax
                         const { processedText, arrayAccesses } =
-                            this.preprocessArrayIndexSyntax(textAfterBlockComments);
+                            this.preprocessArrayIndexSyntax(textAfterBooleans);
 
                         // Parse the processed text
                         const stmtAst = this.parser.astify(processedText);
@@ -1856,6 +1946,9 @@ export class SQLParser {
 
                         // Apply post-processing for TABLE(GENERATOR())
                         processedAst = this.postprocessTableGenerator(processedAst, tableGeneratorMatches);
+
+                        // Apply post-processing for boolean literals
+                        processedAst = this.postprocessBooleanLiterals(processedAst, booleanLiterals);
 
                         // Apply post-processing for PostgreSQL casting
                         processedAst = this.postprocessPostgreSQLCasting(processedAst, castings);
@@ -2038,8 +2131,11 @@ export class SQLParser {
         const { processedText: textAfterBlockComments, blockComments } =
             this.preprocessBlockComments(textAfterInlineComments);
 
+        // Preprocess boolean literals (node-sql-parser doesn't handle FALSE consistently)
+        const { processedText: textAfterBooleans, booleanLiterals } = this.preprocessBooleanLiterals(textAfterBlockComments);
+
         // Preprocess array index syntax
-        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterBlockComments);
+        const { processedText, arrayAccesses } = this.preprocessArrayIndexSyntax(textAfterBooleans);
 
         try {
             // Parse the processed text
@@ -2056,6 +2152,9 @@ export class SQLParser {
 
             // Post-processing for TABLE(GENERATOR())
             processedAst = this.postprocessTableGenerator(processedAst, tableGeneratorMatches);
+
+            // Post-processing for boolean literals
+            processedAst = this.postprocessBooleanLiterals(processedAst, booleanLiterals);
 
             // Post-processing for PostgreSQL casting
             processedAst = this.postprocessPostgreSQLCasting(processedAst, castings);
