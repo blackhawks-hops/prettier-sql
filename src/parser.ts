@@ -795,31 +795,61 @@ export class SQLParser {
         const booleanLiterals: Array<{ original: string; placeholder: string; value: boolean }> = [];
 
         // Replace standalone FALSE and TRUE literals with placeholders
-        // Use word boundaries to avoid matching parts of words
-        const falsePattern = /\bFALSE\b/gi;
-        const truePattern = /\bTRUE\b/gi;
-
-        // Process FALSE literals
-        processedText = processedText.replace(falsePattern, (match) => {
-            const placeholder = `'__BOOLEAN_FALSE_${booleanLiterals.length}__'`;
-            booleanLiterals.push({
-                original: match,
-                placeholder: placeholder,
-                value: false,
-            });
-            return placeholder;
-        });
-
-        // Process TRUE literals
-        processedText = processedText.replace(truePattern, (match) => {
-            const placeholder = `'__BOOLEAN_TRUE_${booleanLiterals.length}__'`;
-            booleanLiterals.push({
-                original: match,
-                placeholder: placeholder,
-                value: true,
-            });
-            return placeholder;
-        });
+        // Use a more sophisticated approach to avoid replacing inside quoted strings
+        function replaceBooleansOutsideQuotes(text: string): string {
+            let result = "";
+            let inSingleQuote = false;
+            let inDoubleQuote = false;
+            let i = 0;
+            
+            while (i < text.length) {
+                const char = text[i];
+                
+                if (char === "'" && !inDoubleQuote) {
+                    inSingleQuote = !inSingleQuote;
+                    result += char;
+                    i++;
+                } else if (char === '"' && !inSingleQuote) {
+                    inDoubleQuote = !inDoubleQuote;
+                    result += char;
+                    i++;
+                } else if (!inSingleQuote && !inDoubleQuote) {
+                    // Check for TRUE/FALSE outside quotes
+                    const trueMatch = text.substring(i).match(/^(TRUE)\b/i);
+                    const falseMatch = text.substring(i).match(/^(FALSE)\b/i);
+                    
+                    if (trueMatch) {
+                        const placeholder = `99${booleanLiterals.length}1`;
+                        booleanLiterals.push({
+                            original: trueMatch[1],
+                            placeholder: placeholder,
+                            value: true,
+                        });
+                        result += placeholder;
+                        i += trueMatch[1].length;
+                    } else if (falseMatch) {
+                        const placeholder = `99${booleanLiterals.length}0`;
+                        booleanLiterals.push({
+                            original: falseMatch[1],
+                            placeholder: placeholder,
+                            value: false,
+                        });
+                        result += placeholder;
+                        i += falseMatch[1].length;
+                    } else {
+                        result += char;
+                        i++;
+                    }
+                } else {
+                    result += char;
+                    i++;
+                }
+            }
+            
+            return result;
+        }
+        
+        processedText = replaceBooleansOutsideQuotes(processedText);
 
         return { processedText, booleanLiterals };
     }
@@ -1089,11 +1119,10 @@ export class SQLParser {
         function replaceBooleanPlaceholders(node: any): any {
             if (!node) return node;
 
-            if (typeof node === "string") {
-                // Check if this string is a boolean literal placeholder
+            if (typeof node === "string" || typeof node === "number") {
+                // Check if this string/number is a boolean literal placeholder
                 for (const booleanLiteral of booleanLiterals) {
-                    const placeholderWithoutQuotes = booleanLiteral.placeholder.slice(1, -1);
-                    if (node === placeholderWithoutQuotes || node === booleanLiteral.placeholder) {
+                    if (String(node) === booleanLiteral.placeholder) {
                         // Return a proper boolean node structure
                         return {
                             type: "bool",

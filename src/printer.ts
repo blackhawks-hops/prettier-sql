@@ -1442,6 +1442,7 @@ function formatBinaryExpression(expr: any, statement?: any): string {
             ? formatBinaryExpression(expr.left, statement)
             : formatExpressionValue(expr.left, statement);
 
+
     const right =
         expr.right.type === "binary_expr"
             ? formatBinaryExpression(expr.right, statement)
@@ -1529,6 +1530,10 @@ function formatExpressionValue(expr: any, statement?: any): string {
     if (expr.type === "column_ref") {
         return formatColumnRef(expr);
     } else if (expr.type === "number") {
+        // Handle boolean objects that ended up as number types
+        if (typeof expr.value === "object" && expr.value.type === "bool") {
+            return expr.value.value ? "TRUE" : "FALSE";
+        }
         return expr.value.toString();
     } else if (expr.type === "function") {
         // Special case for common SQL functions that don't use parentheses
@@ -1583,6 +1588,18 @@ function formatExpressionValue(expr: any, statement?: any): string {
         }
         return "";
     }
+    
+    // Handle boolean objects that weren't caught by specific type checks
+    if (typeof expr === "object" && expr.type === "bool") {
+        return expr.value ? "TRUE" : "FALSE";
+    }
+    
+    // Handle boolean objects in the value property
+    if (expr.value && typeof expr.value === "object" && expr.value.type === "bool") {
+        return expr.value.value ? "TRUE" : "FALSE";
+    }
+    
+    
     return expr.value || "";
 }
 

@@ -226,6 +226,17 @@ ORDER BY t.arena_id
         expect(formatted.trim()).toBe(expected);
     });
 
+    test("Default booleans with comments", async () => {
+        const unformatted = `CREATE TABLE test (is_interpolated BOOLEAN DEFAULT FALSE COMMENT 'If true, the row was interpolated, not observed');`;
+        const expected = `CREATE TABLE test (
+      is_interpolated BOOLEAN DEFAULT FALSE COMMENT 'If true, the row was interpolated, not observed'
+)
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
     test("Inline comments", async () => {
         const unformatted = `CREATE TABLE my_table (id INT PRIMARY KEY, name VARCHAR(100) -- full name);`;
         const expected = `CREATE TABLE my_table (
