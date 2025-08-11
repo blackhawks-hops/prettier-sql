@@ -671,4 +671,24 @@ WHERE status IS NOT NULL
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("complex where clause", async () => {
+        const unformatted = `
+      SELECT id, name, email
+      FROM public.user
+      WHERE AS_OF_DATE=(SELECT MAX(AS_OF_DATE) FROM public.user)
+    `;
+
+        const expected = `SELECT id
+     , name
+     , email
+FROM public.user
+WHERE as_of_date = (
+    SELECT MAX(as_of_date)
+    FROM public.user
+)
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

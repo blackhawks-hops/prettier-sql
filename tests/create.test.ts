@@ -512,4 +512,27 @@ FROM users
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("lowercase table names", async () => {
+        const unformatted = `CREATE TABLE PUBLIC.FOO (id INT PRIMARY KEY, name VARCHAR(100));`;
+        const expected = `CREATE TABLE public.foo (
+      id   INT PRIMARY KEY
+    , name VARCHAR(100)
+)
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("lowercase view names", async () => {
+        const unformatted = `CREATE VIEW PUBLIC.FOO AS SELECT id, name FROM PUBLIC.BAR;`;
+        const expected = `CREATE VIEW public.foo AS
+SELECT id
+     , name
+FROM public.bar
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

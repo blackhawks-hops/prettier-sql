@@ -14,7 +14,7 @@ describe("IN syntax formatting", () => {
         const sql =
             "SELECT * FROM hawks_analytics.SEASON_LOP_SAMPLE_STATS ss WHERE ss.super_component NOT IN ('OPA_OFFENSE', 'PENALTIES', 'FACEOFFS')";
         const expected = `SELECT *
-FROM hawks_analytics.SEASON_LOP_SAMPLE_STATS ss
+FROM hawks_analytics.season_lop_sample_stats ss
 WHERE ss.super_component NOT IN ('OPA_OFFENSE', 'PENALTIES', 'FACEOFFS')
 ;`;
 

@@ -187,9 +187,6 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             if (tableRef.db) {
                 // Handle specific schema name transformation
                 let schemaName = tableRef.db.toLowerCase();
-                if (schemaName === "hawks_analytics") {
-                    schemaName = "hawks";
-                }
                 parts.push(`${schemaName}.${tableRef.table.toLowerCase()}`);
             } else if (tableRef.table) {
                 parts.push(tableRef.table.toLowerCase());
@@ -213,7 +210,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
 
             // Filter out non-column definitions (like table constraints)
             const columnDefinitions = ast.create_definitions.filter(
-                (def: any) => def.column && def.column.column && def.definition,
+                (def: any) => def.column && def.column.column && def.definition
             );
 
             // First pass: find maximum column name length for alignment (using lowercase)
@@ -319,7 +316,10 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
                             columnDefs.push(`'${def.default_val.value}'`);
                         } else if (def.default_val.value && def.default_val.value.value) {
                             // For structured values
-                            if (typeof def.default_val.value.value === "object" && def.default_val.value.value.type === "bool") {
+                            if (
+                                typeof def.default_val.value.value === "object" &&
+                                def.default_val.value.value.type === "bool"
+                            ) {
                                 // Handle boolean objects that ended up in nested structure
                                 columnDefs.push(def.default_val.value.value.value ? "TRUE" : "FALSE");
                             } else {
@@ -450,7 +450,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
 
         // Include schema/database name if available
         if (ast.view && ast.view.db) {
-            parts.push(`${ast.view.db}.${ast.view.view || ""}`);
+            parts.push(`${ast.view.db.toLowerCase()}.${ast.view.view.toLowerCase() || ""}`);
         } else if (ast.view && ast.view.view) {
             parts.push(ast.view.view);
         }
@@ -949,7 +949,7 @@ function formatFunction(func: any, statement?: any): string {
 
                     // Find the corresponding original function call
                     const originalFunction = statement.greatest_least_functions.find(
-                        (f: any, i: number) => i === index && f.functionName === functionType,
+                        (f: any, i: number) => i === index && f.functionName === functionType
                     );
 
                     if (originalFunction) {
@@ -959,7 +959,7 @@ function formatFunction(func: any, statement?: any): string {
                         // Replace the function name with uppercase version (including _ignore_nulls variants)
                         const formattedOriginal = original.replace(
                             /^(greatest(?:_ignore_nulls)?|least(?:_ignore_nulls)?)/i,
-                            upperCaseFunctionName,
+                            upperCaseFunctionName
                         );
                         return formattedOriginal;
                     }
@@ -1226,9 +1226,9 @@ function formatFrom(fromItems: any[]): doc.builders.DocCommand {
         } else if (tableItem.table) {
             // Include database name if provided
             if (tableItem.db) {
-                fromText = `${tableItem.db}.${tableItem.table}`;
+                fromText = `${tableItem.db.toLowerCase()}.${tableItem.table.toLowerCase()}`;
             } else {
-                fromText = tableItem.table;
+                fromText = tableItem.table.toLowerCase();
             }
 
             if (tableItem.as) {
@@ -1442,7 +1442,6 @@ function formatBinaryExpression(expr: any, statement?: any): string {
             ? formatBinaryExpression(expr.left, statement)
             : formatExpressionValue(expr.left, statement);
 
-
     const right =
         expr.right.type === "binary_expr"
             ? formatBinaryExpression(expr.right, statement)
@@ -1588,18 +1587,17 @@ function formatExpressionValue(expr: any, statement?: any): string {
         }
         return "";
     }
-    
+
     // Handle boolean objects that weren't caught by specific type checks
     if (typeof expr === "object" && expr.type === "bool") {
         return expr.value ? "TRUE" : "FALSE";
     }
-    
+
     // Handle boolean objects in the value property
     if (expr.value && typeof expr.value === "object" && expr.value.type === "bool") {
         return expr.value.value ? "TRUE" : "FALSE";
     }
-    
-    
+
     return expr.value || "";
 }
 
@@ -1983,7 +1981,7 @@ function formatGrant(ast: GrantAst): doc.builders.DocCommand {
         // Parse the statement to uppercase keywords while preserving identifier case
         const statement = ast.statement.replace(
             /\b(GRANT|ON|IN|TO|ROLE|USAGE|SELECT|CREATE|TABLE|TABLES|VIEWS|FUTURE|DELETE|INSERT|REBUILD|REFERENCES|TRUNCATE|UPDATE|MONITOR)\b/gi,
-            (match) => match.toUpperCase(),
+            (match) => match.toUpperCase()
         );
         parts.push(statement);
         if (!statement.endsWith(";")) {
