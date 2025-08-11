@@ -1829,7 +1829,7 @@ export class SQLParser {
                         if (sqlOnly.trim().toUpperCase().startsWith("CREATE") && !createViewInfo) {
                             // Only preprocess inline comments if we're not processing a CREATE VIEW
                             // (CREATE VIEW queries are now processed as standalone SELECTs)
-                            const preprocessResult = this.preprocessInlineComments(textAfterCreateView);
+                            const preprocessResult = this.preprocessInlineComments(textAfterCustomTypes);
                             textAfterInlineComments = preprocessResult.processedText;
                             inlineComments = preprocessResult.inlineComments;
                         }
@@ -1940,12 +1940,20 @@ export class SQLParser {
             if (this.isGrantStatement(sqlStatement)) {
                 sqlAst = this.parseGrantStatement(sqlStatement);
             } else {
-                // For other SQL statements, parse normally (but this will likely still fail)
-                // For now, create a simple structure
-                sqlAst = {
-                    type: "unknown",
-                    statement: sqlStatement,
-                };
+                // For other SQL statements, parse them through the normal preprocessing pipeline
+                // This handles CREATE, SELECT, etc. statements with leading comments
+                try {
+                    // Use the same parsing logic as single statements
+                    const parsedResult = this.parse(sqlStatement);
+                    sqlAst = parsedResult.ast;
+                } catch (error) {
+                    // If parsing fails, create a simple structure
+                    sqlAst = {
+                        type: "unknown",
+                        statement: sqlStatement,
+                        error: error instanceof Error ? error.message : String(error),
+                    };
+                }
             }
 
             // Create an AST that includes both comments and SQL
