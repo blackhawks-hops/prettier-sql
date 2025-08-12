@@ -186,7 +186,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
             // Include schema/database name if available (all lowercase)
             if (tableRef.db) {
                 // Handle specific schema name transformation
-                let schemaName = tableRef.db.toLowerCase();
+                const schemaName = tableRef.db.toLowerCase();
                 parts.push(`${schemaName}.${tableRef.table.toLowerCase()}`);
             } else if (tableRef.table) {
                 parts.push(tableRef.table.toLowerCase());
@@ -449,10 +449,10 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         parts.push("VIEW ");
 
         // Include schema/database name if available
-        if (ast.view && ast.view.db) {
-            parts.push(`${ast.view.db.toLowerCase()}.${ast.view.view.toLowerCase() || ""}`);
+        if (ast.view && ast.view.db && ast.view.view) {
+            parts.push(`${ast.view.db.toLowerCase()}.${ast.view.view.toLowerCase()}`);
         } else if (ast.view && ast.view.view) {
-            parts.push(ast.view.view);
+            parts.push(ast.view.view.toLowerCase());
         }
 
         parts.push(" AS");
@@ -1369,6 +1369,14 @@ function formatWhere(where: any, statement?: any): doc.builders.DocCommand {
 
             // Standard binary expression format if not a subquery
             parts.push(formatExpressionValue(where.right, statement));
+        } else if (operator === "=" && where.right && where.right.ast && where.right.ast.type === "select") {
+            // Special handling for equals with subquery
+            parts.push(" ");
+            parts.push(formatExpressionValue(where.left, statement)); // Column or expression on left side
+            parts.push(" = (");
+            parts.push(indent([hardline, formatSelect(where.right.ast, false)]));
+            parts.push(hardline);
+            parts.push(")");
         } else {
             // Simple binary expression
             parts.push(" ");
@@ -1597,6 +1605,7 @@ function formatExpressionValue(expr: any, statement?: any): string {
     if (expr.value && typeof expr.value === "object" && expr.value.type === "bool") {
         return expr.value.value ? "TRUE" : "FALSE";
     }
+
 
     return expr.value || "";
 }
