@@ -691,4 +691,32 @@ WHERE as_of_date = (
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("CTE with a union", async () => {
+        const unformatted = `
+      WITH active_users AS (
+          SELECT id, name FROM users WHERE status = 'active'
+          UNION
+          SELECT id, name FROM customers WHERE status = 'active'
+      )
+      SELECT * FROM active_users
+    `;
+
+        const expected = `WITH active_users AS (
+    SELECT id
+         , name
+    FROM users
+    WHERE status = 'active'
+    UNION
+    SELECT id
+         , name
+    FROM customers
+    WHERE status = 'active'
+)
+SELECT *
+FROM active_users
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });
