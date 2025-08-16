@@ -609,7 +609,10 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true, statement?:
         parts.push("GROUP BY ALL");
     } else if (Array.isArray(ast.groupby?.columns)) {
         parts.push(hardline);
-        parts.push(`GROUP BY ${ast.groupby.columns.map((item: any) => item.value || item.column || "").join(", ")}`);
+        const groupByText = ast.groupby.columns.map((item: any) => item.value || item.column || "").join(", ");
+        // Replace GROUP BY ALL placeholders with actual GROUP BY ALL
+        const cleanedGroupByText = groupByText.replace(/__GROUP_BY_ALL_\d+__/g, "ALL");
+        parts.push(`GROUP BY ${cleanedGroupByText}`);
     }
 
     // Format HAVING clause
