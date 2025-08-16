@@ -535,4 +535,19 @@ FROM public.bar
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
+
+    test("least & greatest functions", async () => {
+        const unformatted = `create view foo as
+        select least(height_16 / height_18, 1) AS peak_height_ratio_least
+             , greatest(height_16 / height_18, 1) AS peak_height_ratio_greatest
+        from bar;`;
+        const expected = `CREATE VIEW foo AS
+SELECT LEAST(height_16 / height_18, 1) AS peak_height_ratio_least
+     , GREATEST(height_16 / height_18, 1) AS peak_height_ratio_greatest
+FROM bar
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
 });

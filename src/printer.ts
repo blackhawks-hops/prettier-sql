@@ -456,7 +456,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         }
 
         parts.push(" AS");
-        parts.push([hardline, formatSelect(ast.select, false)]);
+        parts.push([hardline, formatSelect(ast.select, false, ast)]);
     }
     // Handle dynamic table creation
     else if ((ast.keyword as string) === "dynamic_table") {
@@ -490,7 +490,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
         }
 
         parts.push([hardline, "AS"]);
-        parts.push([hardline, formatSelect(ast.select, false)]);
+        parts.push([hardline, formatSelect(ast.select, false, ast)]);
     }
 
     // We don't add a hardline for schema creation
@@ -505,7 +505,7 @@ function formatCreate(ast: CustomCreate): doc.builders.DocCommand {
 /**
  * Format a SELECT statement
  */
-function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builders.DocCommand {
+function formatSelect(ast: Select, includeSemicolon: boolean = true, statement?: any): doc.builders.DocCommand {
     const parts: doc.builders.DocCommand[] = [];
 
     // Handle WITH clause if present
@@ -551,7 +551,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
     parts.push("SELECT");
 
     if (ast.columns && Array.isArray(ast.columns)) {
-        parts.push(formatColumns(ast.columns, ast));
+        parts.push(formatColumns(ast.columns, statement || ast));
     }
 
     // Format FROM clause
@@ -599,7 +599,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
     if (ast.where) {
         parts.push(hardline);
         parts.push("WHERE");
-        parts.push(formatWhere(ast.where, ast));
+        parts.push(formatWhere(ast.where, statement || ast));
     }
 
     // Format GROUP BY clause
@@ -616,7 +616,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
     if (ast.having) {
         parts.push(hardline);
         parts.push("HAVING");
-        parts.push(formatWhere(ast.having, ast));
+        parts.push(formatWhere(ast.having, statement || ast));
     }
 
     // Format QUALIFY clause (for regular QUALIFY clauses not in comments)
