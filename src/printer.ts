@@ -649,7 +649,7 @@ function formatSelect(ast: Select, includeSemicolon: boolean = true): doc.builde
                 } else if (item.expr.type === "function") {
                     orderStr = formatFunction(item.expr, ast);
                 } else if (item.expr.type === "aggr_func") {
-                    orderStr = formatAggregationFunction(item.expr);
+                    orderStr = formatAggregationFunction(item.expr, ast);
                 } else {
                     orderStr = formatExpressionValue(item.expr, ast) || item.expr.value || "";
                 }
@@ -846,13 +846,18 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
                     formattedColumn = formatFunction(column.expr, statement);
                 }
             } else if (column.expr.type === "aggr_func") {
-                formattedColumn = formatAggregationFunction(column.expr);
+                formattedColumn = formatAggregationFunction(column.expr, statement);
             } else if (column.expr.type === "column_ref") {
                 formattedColumn = formatColumnRef(column.expr);
             } else if (column.expr.type === "star") {
                 formattedColumn = "*";
             } else if (column.expr.type === "number") {
-                formattedColumn = column.expr.value.toString();
+                // Handle boolean objects that ended up as number types
+                if (typeof column.expr.value === "object" && column.expr.value !== null && column.expr.value.type === "bool") {
+                    formattedColumn = column.expr.value.value ? "TRUE" : "FALSE";
+                } else {
+                    formattedColumn = column.expr.value.toString();
+                }
             } else if (column.expr.type === "binary_expr") {
                 formattedColumn = formatBinaryExpression(column.expr, statement);
             } else if (column.expr.type === "case") {
@@ -868,6 +873,16 @@ function formatColumns(columns: any[], statement?: any): doc.builders.DocCommand
                 }
             } else if (column.expr.type === "bool") {
                 formattedColumn = column.expr.value ? "TRUE" : "FALSE";
+            } else if (typeof column.expr.value === "object" && column.expr.value !== null && column.expr.value.type === "bool") {
+                // Handle boolean objects that ended up in the value property
+                formattedColumn = column.expr.value.value ? "TRUE" : "FALSE";
+            } else if (typeof column.expr.value === "object" && column.expr.value !== null) {
+                // Check if it's a boolean object with different structure
+                if (column.expr.value.hasOwnProperty('value') && typeof column.expr.value.value === 'boolean') {
+                    formattedColumn = column.expr.value.value ? "TRUE" : "FALSE";
+                } else {
+                    formattedColumn = String(column.expr.value || "");
+                }
             } else {
                 formattedColumn = String(column.expr.value || "");
             }
@@ -1040,7 +1055,7 @@ function formatFunction(func: any, statement?: any): string {
                     } else if (item.expr && item.expr.type === "function") {
                         orderStr = formatFunction(item.expr, statement);
                     } else if (item.expr && item.expr.type === "aggr_func") {
-                        orderStr = formatAggregationFunction(item.expr);
+                        orderStr = formatAggregationFunction(item.expr, statement);
                     } else if (item.expr && item.expr.value) {
                         orderStr = item.expr.value;
                     }
@@ -1131,6 +1146,8 @@ function processArg(arg: any, statement?: any): string {
         return formatBinaryExpression(arg, statement);
     } else if (arg.type === "cast") {
         return formatCastExpression(arg, statement);
+    } else if (arg.type === "case") {
+        return formatCaseExpression(arg, statement);
     } else if (arg.type === "number") {
         return arg.value.toString();
     } else if (arg.type === "single_quote_string") {
@@ -1147,22 +1164,85 @@ function processArg(arg: any, statement?: any): string {
 /**
  * Format an aggregation function
  */
-function formatAggregationFunction(func: any): string {
+function formatAggregationFunction(func: any, statement?: any): string {
     if (!func.name) return "";
 
     const funcName = func.name.toUpperCase();
 
+    let result = "";
+    
     if (Array.isArray(func.args)) {
         const args = func.args.map((arg: any) => {
-            return processArg(arg);
+            return processArg(arg, statement);
         });
-        return `${funcName}(${args.join(", ")})`;
+        result = `${funcName}(${args.join(", ")})`;
     } else if (func.args?.expr) {
-        const arg = processArg(func.args?.expr);
-        return `${funcName}(${func.args.distinct ? "DISTINCT " : ""}${arg})`;
+        const arg = processArg(func.args?.expr, statement);
+        result = `${funcName}(${func.args.distinct ? "DISTINCT " : ""}${arg})`;
+    } else {
+        result = `${funcName}()`;
     }
 
-    return `${funcName}()`;
+    // Handle window functions with OVER clause
+    if (func.over) {
+        result += " OVER (";
+        
+        // Handle PARTITION BY in OVER clause - must come before ORDER BY
+        const windowSpec = func.over.as_window_specification?.window_specification;
+        const partitionBy = windowSpec?.partitionby || func.over.partition_by;
+        if (partitionBy) {
+            result += "PARTITION BY ";
+            if (Array.isArray(partitionBy)) {
+                const partitionCols = partitionBy.map((col: any) => {
+                    if (col.expr && col.expr.type === "column_ref") {
+                        return formatColumnRef(col.expr);
+                    } else if (col.type === "column_ref") {
+                        return formatColumnRef(col);
+                    } else if (typeof col === "object" && col.column) {
+                        // Handle different column reference structures
+                        return col.column;
+                    }
+                    return col.value || col;
+                });
+                result += partitionCols.join(", ");
+            } else if (typeof partitionBy === "object" && partitionBy.column) {
+                result += partitionBy.column;
+            } else {
+                result += partitionBy.value || partitionBy;
+            }
+        }
+
+        // Handle ORDER BY in OVER clause after PARTITION BY
+        const orderBy = windowSpec?.orderby || func.over.order_by;
+        if (orderBy) {
+            if (partitionBy) result += " ";
+            result += "ORDER BY ";
+            if (Array.isArray(orderBy)) {
+                const orderCols = orderBy.map((col: any) => {
+                    let orderStr = "";
+                    if (col.expr && col.expr.type === "column_ref") {
+                        orderStr = formatColumnRef(col.expr);
+                    } else if (col.expr) {
+                        orderStr = col.expr.value || col.expr;
+                    } else {
+                        orderStr = col.value || col;
+                    }
+                    
+                    if (col.type) {
+                        orderStr += ` ${col.type.toUpperCase()}`;
+                    }
+                    return orderStr;
+                });
+                result += orderCols.join(", ");
+            } else {
+                result += orderBy.value || orderBy;
+            }
+        }
+        
+        result += ")";
+    }
+
+    return result;
 }
 
 /**
@@ -1509,15 +1589,11 @@ function formatBinaryExpressionWithIndent(expr: any, statement?: any): doc.build
             parts.push(formatBinaryExpression(expr.right, statement));
             parts.push(")");
         } else {
-            if (expr.right.type === "binary_expr" && ["AND", "OR"].includes(expr.right.operator.toUpperCase())) {
-                parts.push(formatBinaryExpression(expr.right.left, statement));
-                parts.push(hardline);
-                parts.push("  ");
-                parts.push(expr.right.operator.toUpperCase());
-                parts.push(" ");
-                parts.push(formatExpressionValue(expr.right.right, statement));
+            // Handle the right side appropriately based on its type
+            if (expr.right.type === "binary_expr") {
+                parts.push(formatBinaryExpressionWithIndent(expr.right, statement));
             } else {
-                parts.push(formatBinaryExpression(expr.right, statement));
+                parts.push(formatExpressionValue(expr.right, statement));
             }
         }
     } else {
@@ -1587,7 +1663,7 @@ function formatExpressionValue(expr: any, statement?: any): string {
         return formatCastExpression(expr, statement);
     } else if (expr.type === "aggr_func") {
         // Handle aggregate functions
-        return formatAggregationFunction(expr);
+        return formatAggregationFunction(expr, statement);
     } else if (expr.type === "expr_list") {
         // Handle expression lists (e.g., IN clause values)
         if (Array.isArray(expr.value)) {

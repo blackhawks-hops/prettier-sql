@@ -581,6 +581,18 @@ WHERE NOT active
         expect(formatted.trim()).toBe(expected);
     });
 
+    test("two where nots", async () => {
+        const unformatted = `select * from users where not active and not cool;`;
+
+        const expected = `SELECT *
+FROM users
+WHERE NOT active
+  AND NOT cool
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
     test("interspersed comments", async () => {
         const unformatted = `
       SELECT id -- comment on a line
@@ -716,6 +728,32 @@ WHERE as_of_date = (
 SELECT *
 FROM active_users
 ;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("Boolean value columns", async () => {
+        const unformatted = "select true as is_thing;";
+        const expected = `SELECT TRUE AS is_thing
+;`;
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
+    test("Sum partition", async () => {
+        const unformatted = `
+      SELECT id, name
+      , SUM(CASE WHEN p.as_of_age = d.age THEN 0 ELSE toi_delta END) OVER (PARTITION BY player_id_hawks, as_of_date, league_order, p.manpower_group, p.position_group
+                                ORDER BY age) AS cumulative_delta
+      FROM users;
+    `;
+
+        const expected = `SELECT id
+     , name
+     , SUM(CASE WHEN p.as_of_age = d.age THEN 0 ELSE toi_delta END) OVER (PARTITION BY player_id_hawks, as_of_date, league_order, p.manpower_group, p.position_group ORDER BY age) AS cumulative_delta
+FROM users
+;`;
+
         const formatted = await prettier.format(unformatted, options);
         expect(formatted.trim()).toBe(expected);
     });
