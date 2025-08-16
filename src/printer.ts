@@ -1059,8 +1059,8 @@ function formatFunction(func: any, statement?: any): string {
                         orderStr = formatFunction(item.expr, statement);
                     } else if (item.expr && item.expr.type === "aggr_func") {
                         orderStr = formatAggregationFunction(item.expr, statement);
-                    } else if (item.expr && item.expr.value) {
-                        orderStr = item.expr.value;
+                    } else if (item.expr) {
+                        orderStr = formatExpressionValue(item.expr, statement) || item.expr.value || "";
                     }
 
                     if (item.type) {
@@ -1225,8 +1225,12 @@ function formatAggregationFunction(func: any, statement?: any): string {
                     let orderStr = "";
                     if (col.expr && col.expr.type === "column_ref") {
                         orderStr = formatColumnRef(col.expr);
+                    } else if (col.expr && col.expr.type === "function") {
+                        orderStr = formatFunction(col.expr, statement);
+                    } else if (col.expr && col.expr.type === "aggr_func") {
+                        orderStr = formatAggregationFunction(col.expr, statement);
                     } else if (col.expr) {
-                        orderStr = col.expr.value || col.expr;
+                        orderStr = formatExpressionValue(col.expr, statement) || col.expr.value || col.expr;
                     } else {
                         orderStr = col.value || col;
                     }

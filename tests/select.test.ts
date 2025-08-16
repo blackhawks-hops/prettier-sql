@@ -279,6 +279,25 @@ WHERE status = 'active'
         expect(formatted.trim()).toBe(expected);
     });
 
+    test("ROW_NUMBER with complex ORDER BY expression", async () => {
+        const unformatted = `
+        SELECT team_id, player_id, 
+        ROW_NUMBER() OVER (
+            PARTITION BY team_id, date
+            ORDER BY ((1*start_pct) + (0.05*proj_war)) DESC) AS rn
+        FROM team_depth
+        `;
+
+        const expected = `SELECT team_id
+     , player_id
+     , ROW_NUMBER() OVER (PARTITION BY team_id, date ORDER BY (1 * start_pct + 0.05 * proj_war) DESC) AS rn
+FROM team_depth
+;`;
+
+        const formatted = await prettier.format(unformatted, options);
+        expect(formatted.trim()).toBe(expected);
+    });
+
     test("Subquery", async () => {
         const unformatted = `SELECT u.id, u.name from users u join  (SELECT id, name FROM orders) o USING(id)
       WHERE status = 'active';
